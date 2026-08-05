@@ -4,6 +4,10 @@ CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
 CONFIG_ESPTOOLPY_FLASHSIZE="16MB"
 CONFIG_SPIRAM_MODE_OCT=y
 
+# WebSocket support required by /ws/leds LED animation endpoint
+# and the original log stream WebSocket endpoint.
+CONFIG_HTTPD_WS_SUPPORT=y
+
 # USB Audio Class defaults for the current usb_device_uac integration.
 # Keep both streams stereo at 48 kHz so the UAC descriptors, feedback,
 # and AirPlay USB backend all use the same resampled output rate.
