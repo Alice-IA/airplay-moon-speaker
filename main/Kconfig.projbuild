@@ -156,6 +156,17 @@ menu "Airplay ESP Configuration"
     endmenu
 
     menu "Audio Output"
+    config AIRPLAY_AUDIO_BUFFER_FRAMES
+        int "Audio ring buffer frames"
+        default 400
+        range 100 2000
+        help
+            Number of audio frames kept in the PSRAM ring buffer.
+            400 frames ~= 3.2 s and fits on 2 MB PSRAM boards (e.g. N8R2).
+            1000 frames ~= 8.0 s and is suitable for 8 MB PSRAM boards
+            (e.g. N16R8). Larger values absorb more network jitter but
+            consume more PSRAM.
+
     choice AUDIO_OUTPUT_TYPE
         prompt "Audio output type"
         default AUDIO_OUTPUT_I2S
