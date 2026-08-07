@@ -1,8 +1,9 @@
 # ESP32-S3 target defaults - default to ESP32-S3 Generic board
 CONFIG_BOARD_ESP32S3_GENERIC=y
-CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
-CONFIG_ESPTOOLPY_FLASHSIZE="16MB"
-CONFIG_SPIRAM_MODE_OCT=y
+
+# Flash size is left at the ESP-IDF default (8 MB) so it works for
+# common modules like N8R2. Change it in menuconfig if your module has 16 MB.
+# CONFIG_ESPTOOLPY_FLASHSIZE_16MB is not set
 
 # WebSocket support required by /ws/leds LED animation endpoint
 # and the original log stream WebSocket endpoint.

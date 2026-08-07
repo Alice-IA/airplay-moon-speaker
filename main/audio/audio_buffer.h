@@ -23,7 +23,10 @@ typedef struct __attribute__((packed)) {
   uint8_t reserved;
 } audio_frame_header_t;
 
-#define MAX_RING_BUFFER_FRAMES 1000
+/* Reduced from 1000 to 400 to fit boards with 2 MB PSRAM (e.g. ESP32-S3 N8R2).
+ * 400 frames ~= 3.2 s of stereo 44.1 kHz audio, which is still plenty for
+ * AirPlay jitter buffering. */
+#define MAX_RING_BUFFER_FRAMES 400
 #define BYTES_PER_FRAME                                          \
   ((size_t)sizeof(audio_frame_header_t) +                        \
    ((size_t)AAC_FRAMES_PER_PACKET * (size_t)AUDIO_MAX_CHANNELS * \
