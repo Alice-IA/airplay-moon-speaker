@@ -275,14 +275,19 @@ static esp_err_t ws_leds_handler(httpd_req_t *req) {
     return ESP_OK;
   }
 
-  s_client_fd = httpd_req_to_sockfd(req);
+  int fd = httpd_req_to_sockfd(req);
+  s_client_fd = fd;
 
   uint8_t rx_buf[WS_RX_BUF_SIZE];
   httpd_ws_frame_t frame = {0};
   frame.payload = rx_buf;
 
   if (httpd_ws_recv_frame(req, &frame, sizeof(rx_buf)) != ESP_OK) {
-    return ESP_OK;
+    /* Receive failed: client disconnected or sent malformed data.
+       Clear our tracked fd and tell httpd to close the connection. */
+    s_client_fd = -1;
+    handle_stream_stop();
+    return ESP_FAIL;
   }
 
   if (frame.type == HTTPD_WS_TYPE_CLOSE) {
