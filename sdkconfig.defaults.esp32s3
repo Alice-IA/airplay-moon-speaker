@@ -9,6 +9,11 @@ CONFIG_BOARD_ESP32S3_GENERIC=y
 # and the original log stream WebSocket endpoint.
 CONFIG_HTTPD_WS_SUPPORT=y
 
+# Increase socket limit: AirPlay uses many concurrent sockets (RTSP, event,
+# RTP, RTCP) and the added WebSocket endpoint consumes one more per client.
+# 16 is too tight and causes "Failed to create UDP socket: errno=23".
+CONFIG_LWIP_MAX_SOCKETS=32
+
 # USB Audio Class defaults for the current usb_device_uac integration.
 # Keep both streams stereo at 48 kHz so the UAC descriptors, feedback,
 # and AirPlay USB backend all use the same resampled output rate.
