@@ -20,6 +20,9 @@ Usage:
 
   # Animation mode: stream rainbow frames at 30 fps
   python3 led_stream_client.py --ip 192.168.1.100 --mode animate
+
+  # Animation loop mode: store frames on ESP32 and replay them
+  python3 led_stream_client.py --ip 192.168.1.100 --mode animate --loop
 """
 
 import argparse
@@ -34,8 +37,9 @@ FPS = 30
 FRAME_PERIOD = 1.0 / FPS
 
 
-def pack_stream_start(led_count, fps):
-    return struct.pack(">BB", 1, 0x01) + struct.pack(">HH", led_count, fps)
+def pack_stream_start(led_count, fps, loop=False):
+    flags = 0x01 if loop else 0x00
+    return struct.pack(">BB", 1, 0x01) + struct.pack(">HH", led_count, fps) + struct.pack(">B", flags)
 
 
 def pack_stream_stop():
@@ -112,9 +116,9 @@ async def run_static(ws, color, brightness):
     await asyncio.sleep(3600)
 
 
-async def run_animate(ws):
+async def run_animate(ws, loop=False):
     asyncio.create_task(receive_loop(ws))
-    await ws.send(pack_stream_start(LED_COUNT, FPS))
+    await ws.send(pack_stream_start(LED_COUNT, FPS, loop))
     await asyncio.sleep(0.2)
 
     frame_id = 0
@@ -147,6 +151,8 @@ async def main():
     parser.add_argument("--color", default="ff3366", help="Static color hex")
     parser.add_argument("--brightness", type=int, default=255,
                         help="Alpha/brightness 0-255")
+    parser.add_argument("--loop", action="store_true",
+                        help="Store streamed frames on the ESP32 and loop them")
     args = parser.parse_args()
 
     uri = f"ws://{args.ip}/ws/leds"
@@ -154,7 +160,7 @@ async def main():
         if args.mode == "static":
             await run_static(ws, args.color, args.brightness)
         else:
-            await run_animate(ws)
+            await run_animate(ws, args.loop)
 
 
 if __name__ == "__main__":

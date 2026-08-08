@@ -1020,6 +1020,87 @@ static esp_err_t system_restart_handler(httpd_req_t *req) {
 }
 
 /* ================================================================== */
+/*  LED Effect API                                                     */
+/* ================================================================== */
+
+static uint32_t hex_to_rgb(const char *hex) {
+  if (!hex || strlen(hex) == 0) {
+    return 0;
+  }
+  if (hex[0] == '#') {
+    hex++;
+  }
+  return (uint32_t)strtol(hex, NULL, 16);
+}
+
+static esp_err_t led_effect_handler(httpd_req_t *req) {
+  char buf[256];
+  int ret = httpd_req_recv(req, buf, sizeof(buf) - 1);
+  if (ret <= 0) {
+    httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Missing body");
+    return ESP_FAIL;
+  }
+  buf[ret] = '\0';
+
+  cJSON *json = cJSON_Parse(buf);
+  if (!json) {
+    httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid JSON");
+    return ESP_FAIL;
+  }
+
+  cJSON *effect_json = cJSON_GetObjectItem(json, "effect");
+  const char *effect = effect_json && cJSON_IsString(effect_json)
+                           ? effect_json->valuestring
+                           : "off";
+
+  cJSON *speed_json = cJSON_GetObjectItem(json, "speed");
+  uint8_t speed = speed_json && cJSON_IsNumber(speed_json)
+                      ? (uint8_t)speed_json->valueint
+                      : 128;
+
+  cJSON *intensity_json = cJSON_GetObjectItem(json, "intensity");
+  uint8_t intensity = intensity_json && cJSON_IsNumber(intensity_json)
+                          ? (uint8_t)intensity_json->valueint
+                          : 128;
+
+  cJSON *brightness_json = cJSON_GetObjectItem(json, "brightness");
+  uint8_t brightness = brightness_json && cJSON_IsNumber(brightness_json)
+                           ? (uint8_t)brightness_json->valueint
+                           : 255;
+
+  cJSON *color1_json = cJSON_GetObjectItem(json, "color1");
+  const char *color1_str = color1_json && cJSON_IsString(color1_json)
+                                 ? color1_json->valuestring
+                                 : "ff0000";
+
+  cJSON *color2_json = cJSON_GetObjectItem(json, "color2");
+  const char *color2_str = color2_json && cJSON_IsString(color2_json)
+                                 ? color2_json->valuestring
+                                 : "0000ff";
+
+  uint32_t color1 = hex_to_rgb(color1_str);
+  uint32_t color2 = hex_to_rgb(color2_str);
+
+  esp_err_t err = led_anim_stream_start_effect(effect, speed, intensity,
+                                               brightness, color1, color2);
+
+  cJSON *resp = cJSON_CreateObject();
+  cJSON_AddBoolToObject(resp, "success", err == ESP_OK);
+  if (err != ESP_OK) {
+    cJSON_AddStringToObject(resp, "error", esp_err_to_name(err));
+  }
+
+  char *json_str = cJSON_Print(resp);
+  httpd_resp_set_type(req, "application/json");
+  httpd_resp_send(req, json_str, HTTPD_RESP_USE_STRLEN);
+  free(json_str);
+  cJSON_Delete(resp);
+  cJSON_Delete(json);
+
+  return ESP_OK;
+}
+
+/* ================================================================== */
 /*  SPIFFS File Management API                                         */
 /* ================================================================== */
 
@@ -1430,6 +1511,11 @@ esp_err_t web_server_start(uint16_t port) {
                                     .method = HTTP_POST,
                                     .handler = system_restart_handler};
   httpd_register_uri_handler(s_server, &system_restart_uri);
+
+  httpd_uri_t led_effect_uri = {.uri = "/api/led/effect",
+                                .method = HTTP_POST,
+                                .handler = led_effect_handler};
+  httpd_register_uri_handler(s_server, &led_effect_uri);
 
   // File management API
   httpd_uri_t fs_upload_uri = {.uri = "/api/fs/upload",
