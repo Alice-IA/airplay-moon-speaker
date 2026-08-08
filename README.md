@@ -120,7 +120,10 @@ Byte 0: version  = 0x01
 Byte 1: type     = 0x01
 Bytes 2-3: led_count (uint16 big-endian)
 Bytes 4-5: fps (uint16 big-endian)
+Byte 6: flags    (bit 0: loop — store frames and replay them)
 ```
+
+If the **loop** flag is set, the device stores every received frame in PSRAM and replays them in a loop after the stream ends. This is useful for short animations that should run continuously without keeping the WebSocket open.
 
 #### `FRAME` (0x02)
 
@@ -201,6 +204,17 @@ python3 led_stream_client.py \
 
 This sends `STREAM_START` and a rainbow animation at 30 FPS.
 
+### Animation loop mode
+
+```bash
+python3 led_stream_client.py \
+  --ip 192.168.1.100 \
+  --mode animate \
+  --loop
+```
+
+This sends `STREAM_START` with the loop flag set. The ESP32 stores the frames and keeps replaying them after the client disconnects. Send `STREAM_STOP` to clear the loop.
+
 ## HTTP API
 
 ### `GET /api/device/info`
@@ -233,6 +247,36 @@ Sets global LED brightness.
 
 ```json
 { "brightness": 128 }
+```
+
+### `POST /api/led/effect`
+
+Runs a built-in effect on the ESP32 without streaming frames.
+
+```json
+{
+  "effect": "rainbow",
+  "speed": 128,
+  "intensity": 128,
+  "brightness": 200,
+  "color1": "ff0000",
+  "color2": "0000ff"
+}
+```
+
+Available effects: `off`, `static`, `rainbow`, `breathe`, `chase`, `sparkle`, `fire`.
+
+- `speed`: 0-255 (higher = faster)
+- `intensity`: 0-255 (effect-specific)
+- `brightness`: 0-255 global brightness
+- `color1`, `color2`: hex colors used by some effects
+
+Example with `curl`:
+
+```bash
+curl -X POST http://192.168.1.100/api/led/effect \
+  -H "Content-Type: application/json" \
+  -d '{"effect":"breathe","speed":80,"color1":"ff3366","brightness":150}'
 ```
 
 ## HomeAssistant integration
