@@ -5,7 +5,7 @@ Example client for the /ws/leds binary WebSocket protocol.
 Protocol version 1
 
 Client -> ESP32:
-  STREAM_START  0x01  payload: led_count (u16 be), fps (u16 be)
+  STREAM_START  0x01  payload: led_count (u16 be), fps (u16 be), flags (u8)
   FRAME         0x02  payload: frame_id (u32 be), timestamp_ms (u32 be),
                               pixels[led_count * 4] (RGBA)
   STREAM_STOP   0x03  no payload
@@ -32,9 +32,16 @@ import sys
 import time
 import websockets
 
-LED_COUNT = 12
+LED_COUNT = 24
 FPS = 30
 FRAME_PERIOD = 1.0 / FPS
+
+# Reference point for timestamps sent in FRAME messages. timestamp_ms is a
+# u32 field, so we can't send raw epoch-ms (time.time()*1000) - that number
+# is way larger than 4294967295 and struct.pack blows up. Instead we send
+# milliseconds elapsed since this reference point, which comfortably fits
+# in 32 bits for a stream that runs continuously for ~49 days.
+START_TIME = time.time()
 
 
 def pack_stream_start(led_count, fps, loop=False):
@@ -48,7 +55,8 @@ def pack_stream_stop():
 
 def pack_frame(frame_id, rgba_pixels):
     header = struct.pack(">BB", 1, 0x02)
-    body = struct.pack(">II", frame_id, int(time.time() * 1000)) + bytes(rgba_pixels)
+    elapsed_ms = int((time.time() - START_TIME) * 1000) & 0xFFFFFFFF
+    body = struct.pack(">II", frame_id, elapsed_ms) + bytes(rgba_pixels)
     return header + body
 
 

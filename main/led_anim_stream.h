@@ -36,3 +36,27 @@ esp_err_t led_anim_stream_start_effect(const char *name,
  * Stop any active effect or stream and clear the strip.
  */
 void led_anim_stream_stop(void);
+
+/**
+ * Set brightness for the WS2812 animation strip (0-255).
+ * If an effect is running, updates its brightness live.
+ * If in static mode, re-scales the current pixels.
+ */
+void led_anim_stream_set_brightness(uint8_t brightness);
+
+/**
+ * Get current WS2812 animation strip brightness (0-255).
+ */
+uint8_t led_anim_stream_get_brightness(void);
+
+/**
+ * Handle a raw binary FRAME payload (used by MQTT bridge).
+ * Payload format: frame_id (4 BE), timestamp_ms (4 BE), pixels (LED_COUNT * 4 RGBA).
+ */
+void led_anim_stream_handle_frame(const uint8_t *payload, size_t len);
+
+/**
+ * Handle a raw binary STREAM_START payload (used by MQTT bridge).
+ * Payload format: led_count (2 BE), fps (2 BE), flags (1).
+ */
+void led_anim_stream_handle_stream_start(const uint8_t *payload, size_t len);

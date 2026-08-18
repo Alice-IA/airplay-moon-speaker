@@ -538,7 +538,7 @@ static void render_task(void *arg) {
 /* Protocol handlers                                                  */
 /* ------------------------------------------------------------------ */
 
-static void handle_stream_start(const uint8_t *payload, size_t len) {
+void led_anim_stream_handle_stream_start(const uint8_t *payload, size_t len) {
   if (len < 4) {
     ESP_LOGW(TAG, "STREAM_START too short");
     return;
@@ -575,7 +575,7 @@ static void handle_stream_start(const uint8_t *payload, size_t len) {
   ws_send_ready();
 }
 
-static void handle_frame(const uint8_t *payload, size_t len) {
+void led_anim_stream_handle_frame(const uint8_t *payload, size_t len) {
   uint16_t expected = (uint16_t)(8 + (size_t)s_led_count * BYTES_PER_LED);
   if (len < expected) {
     ESP_LOGW(TAG, "FRAME too short for %d LEDs (got %d, expected %d)",
@@ -673,6 +673,21 @@ void led_anim_stream_stop(void) {
   led_strip_ctrl_clear();
 }
 
+void led_anim_stream_set_brightness(uint8_t brightness) {
+  xSemaphoreTake(s_buf_mutex, portMAX_DELAY);
+  s_effect_cfg.brightness = brightness;
+  if (s_mode == MODE_STATIC) {
+    apply_brightness(s_static_pixels, s_led_count, brightness);
+    led_strip_ctrl_set_pixels(s_static_pixels, s_led_count);
+  }
+  xSemaphoreGive(s_buf_mutex);
+  ESP_LOGI(TAG, "Brightness set to %d", brightness);
+}
+
+uint8_t led_anim_stream_get_brightness(void) {
+  return s_effect_cfg.brightness;
+}
+
 /* ------------------------------------------------------------------ */
 /* WebSocket handler                                                  */
 /* ------------------------------------------------------------------ */
@@ -727,10 +742,10 @@ static esp_err_t ws_leds_handler(httpd_req_t *req) {
 
   switch (type) {
   case MSG_STREAM_START:
-    handle_stream_start(payload, payload_len);
+    led_anim_stream_handle_stream_start(payload, payload_len);
     break;
   case MSG_FRAME:
-    handle_frame(payload, payload_len);
+    led_anim_stream_handle_frame(payload, payload_len);
     break;
   case MSG_STREAM_STOP:
     handle_stream_stop();

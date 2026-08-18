@@ -1,0 +1,1244 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Moon — Control de luces</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#08080a;
+    --shell-bg:#111114;
+    --surface:#19191d;
+    --surface-2:#212127;
+    --surface-hover:#26262d;
+    --border: rgba(255,255,255,0.07);
+    --border-strong: rgba(255,255,255,0.14);
+    --text:#f3f3f6;
+    --text-dim:#9c9ca6;
+    --text-faint:#5c5c66;
+    --accent-red:#ef4a4a;
+    --accent-green:#33d17a;
+    --accent-purple:#8b6ff5;
+    --accent-purple-dim: rgba(139,111,245,0.18);
+    --focus: #7c9bff;
+    --radius-xl:32px;
+    --radius-lg:24px;
+    --radius-md:16px;
+    --radius-sm:10px;
+    --font-display: 'Space Grotesk', 'Inter', system-ui, sans-serif;
+    --font-body: 'Inter', system-ui, -apple-system, sans-serif;
+    --shell-max: 430px;
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;}
+  body{
+    margin:0;
+    background: radial-gradient(circle at 50% -10%, #1c1c22 0%, var(--bg) 55%);
+    color:var(--text);
+    font-family:var(--font-body);
+    -webkit-font-smoothing:antialiased;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    min-height:100vh;
+    min-height:100dvh;
+  }
+  button, input{ font-family:inherit; color:inherit; }
+  button{ cursor:pointer; background:none; border:none; padding:0; margin:0; text-align:inherit; font-size:inherit; }
+  ::selection{ background:var(--accent-purple); color:#fff; }
+
+  :focus-visible{ outline:2px solid var(--focus); outline-offset:2px; border-radius:6px; }
+
+  @media (prefers-reduced-motion: reduce){
+    *{ animation-duration:0.001ms !important; transition-duration:0.001ms !important; }
+  }
+
+  #app{
+    width:100%;
+    max-width:var(--shell-max);
+    height:900px;
+    max-height:94vh;
+    max-height:94dvh;
+    background:var(--shell-bg);
+    border-radius:var(--radius-xl);
+    border:1px solid var(--border);
+    box-shadow: 0 40px 80px -20px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.02) inset;
+    overflow:hidden;
+    display:flex;
+    flex-direction:column;
+    position:relative;
+  }
+  @media (max-width: 480px){
+    body{ padding:0; }
+    #app{ max-width:100%; width:100%; height:100dvh; max-height:none; border-radius:0; border:none; }
+  }
+
+  .screen{ display:flex; flex-direction:column; height:100%; overflow:hidden; }
+  .scroll{ overflow-y:auto; flex:1; -webkit-overflow-scrolling:touch; }
+  .scroll::-webkit-scrollbar{ width:6px; }
+  .scroll::-webkit-scrollbar-thumb{ background:var(--border-strong); border-radius:3px; }
+
+  /* ---------- Pantalla: selección de dispositivos ---------- */
+  .devices-header{ padding:36px 24px 8px; text-align:center; }
+  .wordmark{ font-family:var(--font-display); font-weight:700; font-size:26px; letter-spacing:0.14em; }
+  .devices-sub{ color:var(--text-dim); font-size:14px; margin-top:6px; }
+
+  .device-list{ padding:20px 20px 100px; display:flex; flex-direction:column; gap:12px; }
+  .device-card{
+    display:flex; align-items:center; gap:14px;
+    background:var(--surface); border:1px solid var(--border);
+    border-radius:var(--radius-md); padding:16px 16px;
+    text-align:left; width:100%; transition:background .15s, border-color .15s, transform .1s;
+  }
+  .device-card:hover{ background:var(--surface-2); border-color:var(--border-strong); }
+  .device-card:active{ transform:scale(0.99); }
+  .device-avatar{
+    width:44px; height:44px; border-radius:50%;
+    background:conic-gradient(from 180deg,#ff5f6d,#ffc371,#8bd450,#3bc9e8,#7c6cf5,#ff5f6d);
+    flex-shrink:0; position:relative;
+    box-shadow:0 0 0 1px rgba(255,255,255,0.08) inset;
+  }
+  .device-info{ flex:1; min-width:0; }
+  .device-name{ font-weight:600; font-size:15px; display:flex; align-items:center; gap:8px; }
+  .device-ip{ font-size:12.5px; color:var(--text-faint); margin-top:2px; font-variant-numeric:tabular-nums; }
+  .status-dot{ width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+  .status-dot.online{ background:var(--accent-green); box-shadow:0 0 8px rgba(51,209,122,0.7); }
+  .status-dot.offline{ background:var(--accent-red); box-shadow:0 0 8px rgba(239,74,74,0.5); }
+  .status-dot.checking{ background:var(--text-faint); }
+  .device-delete{
+    width:34px; height:34px; border-radius:50%; background:transparent; border:none;
+    color:var(--text-faint); display:flex; align-items:center; justify-content:center;
+    flex-shrink:0; opacity:0; transition:opacity .15s, background .15s, color .15s;
+  }
+  .device-card:hover .device-delete{ opacity:1; }
+  .device-delete:hover{ background:rgba(239,74,74,0.12); color:var(--accent-red); }
+  .device-delete:focus-visible{ opacity:1; }
+
+  .empty-state{ text-align:center; padding:60px 30px; color:var(--text-dim); }
+  .empty-state .empty-icon{ font-size:38px; margin-bottom:10px; opacity:0.6; }
+  .empty-state p{ font-size:14px; line-height:1.5; margin:6px 0 0; }
+
+  .add-device-btn{
+    position:absolute; left:20px; right:20px; bottom:24px;
+    background:var(--text); color:#0c0c0e; border:none; border-radius:999px;
+    padding:16px; font-weight:600; font-size:15px; display:flex; align-items:center; justify-content:center; gap:8px;
+    box-shadow:0 12px 28px -8px rgba(0,0,0,0.5);
+  }
+  .add-device-btn:active{ transform:scale(0.98); }
+
+  /* ---------- Modal ---------- */
+  .modal-overlay{
+    position:absolute; inset:0; background:rgba(4,4,6,0.6); backdrop-filter:blur(3px);
+    display:flex; align-items:flex-end; justify-content:center; z-index:50;
+  }
+  .modal-sheet{
+    width:100%; background:var(--surface); border-radius:24px 24px 0 0;
+    padding:22px 22px calc(22px + env(safe-area-inset-bottom));
+    border-top:1px solid var(--border-strong);
+    animation:sheet-up .22s ease;
+  }
+  @keyframes sheet-up{ from{ transform:translateY(16px); opacity:0.6; } to{ transform:translateY(0); opacity:1; } }
+  .modal-title{ font-family:var(--font-display); font-weight:600; font-size:18px; margin:0 0 4px; }
+  .modal-sub{ color:var(--text-dim); font-size:13px; margin:0 0 18px; }
+  .field{ margin-bottom:14px; }
+  .field label{ display:block; font-size:12.5px; color:var(--text-dim); margin-bottom:6px; font-weight:500; }
+  .field input{
+    width:100%; background:var(--surface-2); border:1px solid var(--border);
+    border-radius:var(--radius-sm); padding:13px 14px; font-size:15px; color:var(--text);
+  }
+  .field input::placeholder{ color:var(--text-faint); }
+  .field input:focus{ border-color:var(--focus); outline:none; }
+  .field-error{ color:var(--accent-red); font-size:12px; margin-top:6px; min-height:14px; }
+  .modal-actions{ display:flex; gap:10px; margin-top:6px; }
+  .btn{ border:none; border-radius:999px; padding:13px 18px; font-weight:600; font-size:14.5px; flex:1; text-align:center; }
+  .btn-primary{ background:var(--text); color:#0c0c0e; }
+  .btn-primary:disabled{ opacity:0.45; }
+  .btn-ghost{ background:var(--surface-2); color:var(--text); }
+  .btn-ghost:hover{ background:var(--surface-hover); }
+
+  /* ---------- Pantalla de control ---------- */
+  .control-header{
+    display:flex; align-items:center; gap:12px; padding:18px 18px 6px;
+  }
+  .icon-btn{
+    width:38px; height:38px; border-radius:50%; background:var(--surface); border:1px solid var(--border);
+    display:flex; align-items:center; justify-content:center; flex-shrink:0; color:var(--text);
+  }
+  .icon-btn:hover{ background:var(--surface-2); }
+  .control-title-wrap{ flex:1; min-width:0; text-align:center; }
+  .control-title{ font-family:var(--font-display); font-weight:600; font-size:16px; display:flex; align-items:center; justify-content:center; gap:8px; }
+  .control-title .status-dot{ width:7px; height:7px; }
+  .control-sub{ font-size:11.5px; color:var(--text-faint); margin-top:1px; }
+
+  .nav-menu{
+    display:flex; gap:6px; margin:14px 18px 6px; background:var(--surface);
+    border:1px solid var(--border); border-radius:999px; padding:4px;
+  }
+  .nav-item{
+    flex:1; background:transparent; border:none; border-radius:999px; padding:10px 6px;
+    font-size:13.5px; font-weight:600; color:var(--text-dim); transition:background .15s, color .15s;
+  }
+  .nav-item.active{ background:var(--surface-2); color:var(--text); box-shadow:0 0 0 1px var(--border-strong) inset; }
+
+  .tab-content{ padding:18px 18px 40px; }
+
+  /* ---------- Rueda de color ---------- */
+  .wheel-card{
+    background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-lg);
+    padding:22px; display:flex; flex-direction:column; align-items:center; position:relative;
+    transition:opacity .2s;
+  }
+  .wheel-card.is-off{ opacity:0.45; }
+  .power-toggle{
+    position:absolute; top:16px; left:16px; width:38px; height:38px; border-radius:50%;
+    background:var(--surface-2); border:1px solid var(--border); color:var(--accent-red);
+    display:flex; align-items:center; justify-content:center; z-index:2;
+  }
+  .power-toggle.is-on{ background:rgba(239,74,74,0.14); border-color:rgba(239,74,74,0.35); }
+  .wheel-wrap{
+    width:min(280px, 78vw); height:min(280px, 78vw); position:relative; margin-top:8px; touch-action:none;
+  }
+  .wheel-ring{
+    position:absolute; inset:0; border-radius:50%;
+    background:conic-gradient(from -90deg, #ff3b6b, #ff8a3b, #ffe23b, #4bde6e, #3bc9e8, #4b6bff, #b83bff, #ff3b6b);
+  }
+  .wheel-ring-mask{
+    position:absolute; inset:15%; border-radius:50%; background:var(--surface);
+  }
+  .wheel-disc{
+    position:absolute; inset:15%; border-radius:50%; overflow:hidden;
+    box-shadow:0 12px 30px -8px rgba(0,0,0,0.6);
+  }
+  .wheel-disc-sat, .wheel-disc-val{ position:absolute; inset:0; }
+  .wheel-knob{
+    position:absolute; width:26px; height:26px; border-radius:50%; background:#fff;
+    border:3px solid #fff; box-shadow:0 2px 10px rgba(0,0,0,0.5), 0 0 0 1px rgba(0,0,0,0.15);
+    transform:translate(-50%,-50%); pointer-events:none;
+  }
+  .wheel-knob-inner{
+    position:absolute; width:20px; height:20px; border-radius:50%; background:#fff;
+    border:3px solid #fff; box-shadow:0 2px 10px rgba(0,0,0,0.5);
+    transform:translate(-50%,-50%); pointer-events:none;
+  }
+  .hex-readout{
+    margin-top:16px; font-size:12.5px; color:var(--text-faint); letter-spacing:0.04em;
+    font-variant-numeric:tabular-nums;
+  }
+
+  /* ---------- Favoritos ---------- */
+  .section-label{ font-size:12.5px; font-weight:600; color:var(--text-dim); margin:22px 2px 10px; letter-spacing:0.01em; }
+  .favorites-row{ display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+  .fav-swatch{
+    width:38px; height:38px; border-radius:50%; border:2px solid rgba(255,255,255,0.12);
+    position:relative; flex-shrink:0; transition:transform .1s;
+  }
+  .fav-swatch:active{ transform:scale(0.92); }
+  .fav-swatch.selected{ box-shadow:0 0 0 2px var(--shell-bg), 0 0 0 4px var(--text); }
+  .fav-add{
+    width:38px; height:38px; border-radius:50%; background:var(--surface); border:1px dashed var(--border-strong);
+    display:flex; align-items:center; justify-content:center; color:var(--text-dim); flex-shrink:0;
+  }
+  .fav-add:hover{ color:var(--text); border-color:var(--text-dim); }
+
+  /* ---------- Brillo ---------- */
+  .brightness-row{ display:flex; align-items:center; gap:14px; }
+  .brightness-row .icon-static{ color:var(--text-dim); flex-shrink:0; }
+  input[type="range"]{
+    -webkit-appearance:none; appearance:none; width:100%; height:4px; border-radius:2px;
+    background:var(--surface-2); outline:none;
+  }
+  input[type="range"]::-webkit-slider-thumb{
+    -webkit-appearance:none; width:22px; height:22px; border-radius:50%; background:#fff;
+    box-shadow:0 2px 8px rgba(0,0,0,0.5); cursor:pointer; margin-top:-9px;
+  }
+  input[type="range"]::-webkit-slider-runnable-track{ height:4px; border-radius:2px; background:var(--range-fill, linear-gradient(90deg,#fff,#fff)); }
+  input[type="range"]::-moz-range-thumb{ width:20px; height:20px; border:none; border-radius:50%; background:#fff; cursor:pointer; }
+  input[type="range"]::-moz-range-progress{ height:4px; border-radius:2px; background:#fff; }
+  .brightness-value{ font-size:12.5px; color:var(--text-faint); width:34px; text-align:right; font-variant-numeric:tabular-nums; }
+
+  /* ---------- Modo noche ---------- */
+  .night-card{
+    margin-top:22px; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-lg);
+    padding:16px; display:flex; align-items:flex-start; gap:14px;
+  }
+  .night-icon{
+    width:42px; height:42px; border-radius:50%; background:var(--accent-purple-dim); color:var(--accent-purple);
+    display:flex; align-items:center; justify-content:center; flex-shrink:0;
+  }
+  .night-body{ flex:1; min-width:0; }
+  .night-title{ font-weight:600; font-size:14.5px; }
+  .night-desc{ font-size:12.5px; color:var(--text-faint); margin-top:3px; line-height:1.4; }
+  .switch{
+    position:relative; width:46px; height:27px; border-radius:999px; background:var(--surface-2);
+    border:1px solid var(--border); flex-shrink:0; transition:background .15s;
+  }
+  .switch.checked{ background:var(--accent-purple); border-color:var(--accent-purple); }
+  .switch::after{
+    content:''; position:absolute; top:2px; left:2px; width:21px; height:21px; border-radius:50%;
+    background:#fff; transition:transform .15s;
+  }
+  .switch.checked::after{ transform:translateX(19px); }
+
+  /* ---------- Escenas ---------- */
+  .scenes-grid{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .scene-card{
+    background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-md);
+    padding:16px; text-align:left; position:relative; min-height:96px; display:flex; flex-direction:column; justify-content:flex-end;
+  }
+  .scene-card:hover{ border-color:var(--border-strong); }
+  .scene-swatch{ width:26px; height:26px; border-radius:50%; margin-bottom:10px; box-shadow:0 0 0 1px rgba(255,255,255,0.1); }
+  .scene-name{ font-weight:600; font-size:13.5px; }
+  .scene-meta{ font-size:11px; color:var(--text-faint); margin-top:2px; }
+  .scene-card-new{
+    background:transparent; border:1px dashed var(--border-strong); display:flex; flex-direction:row;
+    align-items:center; justify-content:center; gap:8px; color:var(--text-dim); min-height:96px;
+  }
+  .scene-card-new:hover{ color:var(--text); border-color:var(--text-dim); }
+
+  /* ---------- Animaciones ---------- */
+  .fx-list{ display:flex; flex-direction:column; gap:10px; }
+  .fx-card{ background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-md); overflow:hidden; }
+  .fx-head{ display:flex; align-items:center; gap:13px; padding:14px 16px; width:100%; text-align:left; }
+  .fx-icon{ width:38px; height:38px; border-radius:12px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+  .fx-name{ font-weight:600; font-size:14.5px; }
+  .fx-desc{ font-size:11.5px; color:var(--text-faint); margin-top:1px; }
+  .fx-chevron{ margin-left:auto; color:var(--text-faint); transition:transform .15s; flex-shrink:0; }
+  .fx-card.open .fx-chevron{ transform:rotate(90deg); }
+  .fx-body{ padding:0 16px 16px; display:none; }
+  .fx-card.open .fx-body{ display:block; }
+  .fx-row{ margin-bottom:12px; }
+  .fx-row-label{ display:flex; justify-content:space-between; font-size:12px; color:var(--text-dim); margin-bottom:6px; }
+  .fx-colors{ display:flex; gap:10px; margin-top:4px; }
+  .fx-color-input{ display:flex; align-items:center; gap:8px; flex:1; background:var(--surface-2); border:1px solid var(--border); border-radius:var(--radius-sm); padding:8px 10px; }
+  .fx-color-input input[type="color"]{ width:22px; height:22px; border:none; background:none; padding:0; border-radius:50%; overflow:hidden; }
+  .fx-color-input span{ font-size:11.5px; color:var(--text-dim); }
+  .fx-apply-btn{ width:100%; background:var(--text); color:#0c0c0e; border:none; border-radius:var(--radius-sm); padding:11px; font-weight:600; font-size:13.5px; margin-top:4px; }
+
+  .toast{
+    position:absolute; left:50%; bottom:26px; transform:translateX(-50%);
+    background:#1f1f24; border:1px solid var(--border-strong); color:var(--text);
+    padding:10px 18px; border-radius:999px; font-size:13px; box-shadow:0 10px 30px rgba(0,0,0,0.4);
+    z-index:60; opacity:0; pointer-events:none; transition:opacity .2s, transform .2s;
+  }
+  .toast.show{ opacity:1; transform:translateX(-50%) translateY(-4px); }
+
+  .conn-banner{
+    margin:0 18px 4px; background:rgba(239,74,74,0.1); border:1px solid rgba(239,74,74,0.3);
+    color:#ffb0b0; font-size:12px; padding:9px 12px; border-radius:var(--radius-sm); text-align:center;
+  }
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script>
+(function(){
+"use strict";
+
+/* ============================================================
+   Utilidades de color
+   ============================================================ */
+function hsvToRgb(h, s, v){
+  h = ((h % 360) + 360) % 360;
+  const c = v * s;
+  const x = c * (1 - Math.abs(((h/60) % 2) - 1));
+  const m = v - c;
+  let r=0,g=0,b=0;
+  if(h<60){r=c;g=x;b=0;} else if(h<120){r=x;g=c;b=0;}
+  else if(h<180){r=0;g=c;b=x;} else if(h<240){r=0;g=x;b=c;}
+  else if(h<300){r=x;g=0;b=c;} else {r=c;g=0;b=x;}
+  return [Math.round((r+m)*255), Math.round((g+m)*255), Math.round((b+m)*255)];
+}
+function rgbToHsv(r,g,b){
+  r/=255; g/=255; b/=255;
+  const max=Math.max(r,g,b), min=Math.min(r,g,b), d=max-min;
+  let h=0;
+  if(d!==0){
+    if(max===r) h=60*(((g-b)/d)%6);
+    else if(max===g) h=60*((b-r)/d+2);
+    else h=60*((r-g)/d+4);
+  }
+  if(h<0) h+=360;
+  const s = max===0?0:d/max;
+  const v = max;
+  return [h,s,v];
+}
+function rgbToHex(r,g,b){
+  return '#'+[r,g,b].map(v=>v.toString(16).padStart(2,'0')).join('');
+}
+function hexToRgb(hex){
+  hex = hex.replace('#','');
+  if(hex.length===3) hex = hex.split('').map(c=>c+c).join('');
+  const num = parseInt(hex,16);
+  return [(num>>16)&255,(num>>8)&255,num&255];
+}
+function clamp(v,min,max){ return Math.max(min,Math.min(max,v)); }
+function throttle(fn, wait){
+  let last=0, timer=null, pendingArgs=null;
+  return function(...args){
+    const now=Date.now();
+    const remaining = wait - (now-last);
+    if(remaining<=0){
+      last=now; fn.apply(this,args);
+    } else {
+      pendingArgs=args;
+      clearTimeout(timer);
+      timer=setTimeout(()=>{ last=Date.now(); fn.apply(this,pendingArgs); }, remaining);
+    }
+  };
+}
+
+/* ============================================================
+   Almacenamiento local
+   ============================================================ */
+const Store = {
+  getDevices(){ try{ return JSON.parse(localStorage.getItem('moon_devices')||'[]'); }catch(e){ return []; } },
+  saveDevices(list){ localStorage.setItem('moon_devices', JSON.stringify(list)); },
+  key(prefix, deviceId){ return `moon_${prefix}_${deviceId}`; },
+  getFavorites(id){ try{ return JSON.parse(localStorage.getItem(this.key('fav',id))||'[]'); }catch(e){ return []; } },
+  saveFavorites(id, list){ localStorage.setItem(this.key('fav',id), JSON.stringify(list)); },
+  getScenes(id){ try{ return JSON.parse(localStorage.getItem(this.key('scenes',id))||'[]'); }catch(e){ return []; } },
+  saveScenes(id, list){ localStorage.setItem(this.key('scenes',id), JSON.stringify(list)); },
+};
+
+/* ============================================================
+   Cliente API HTTP
+   ============================================================ */
+function apiUrl(ip, path){ return `http://${ip}${path}`; }
+
+async function apiGet(ip, path, timeoutMs=4000){
+  const ctrl = new AbortController();
+  const t = setTimeout(()=>ctrl.abort(), timeoutMs);
+  try{
+    const res = await fetch(apiUrl(ip,path), { signal: ctrl.signal });
+    clearTimeout(t);
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    return await res.json();
+  }catch(e){ clearTimeout(t); throw e; }
+}
+async function apiPost(ip, path, body, timeoutMs=4000){
+  const ctrl = new AbortController();
+  const t = setTimeout(()=>ctrl.abort(), timeoutMs);
+  try{
+    const res = await fetch(apiUrl(ip,path), {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(body),
+      signal: ctrl.signal
+    });
+    clearTimeout(t);
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    return await res.json();
+  }catch(e){ clearTimeout(t); throw e; }
+}
+
+/* ============================================================
+   Gestor de WebSocket binario (protocolo Moon Speaker)
+   ============================================================ */
+class LedSocket{
+  constructor(ip){
+    this.ip = ip;
+    this.ws = null;
+    this.frameId = 0;
+    this.onOpen = null;
+    this.onClose = null;
+  }
+  connect(){
+    if(this.ws && (this.ws.readyState===WebSocket.OPEN || this.ws.readyState===WebSocket.CONNECTING)) return;
+    try{
+      this.ws = new WebSocket(`ws://${this.ip}/ws/leds`);
+      this.ws.binaryType = 'arraybuffer';
+      this.ws.onopen = () => { if(this.onOpen) this.onOpen(); };
+      this.ws.onclose = () => { if(this.onClose) this.onClose(); };
+      this.ws.onerror = () => {};
+    }catch(e){}
+  }
+  close(){
+    if(this.ws){
+      try{ this.ws.close(); }catch(e){}
+      this.ws=null;
+    }
+  }
+  get isOpen(){ return this.ws && this.ws.readyState===WebSocket.OPEN; }
+
+  /* Envía un FRAME suelto (sin STREAM_START) -> modo STATIC, se aplica de inmediato */
+  sendStaticColor(r,g,b,ledCount,a=255){
+    if(!this.isOpen) return false;
+    this.frameId++;
+    const header = new Uint8Array([0x01, 0x02]);
+    const meta = new Uint8Array(8);
+    const dv = new DataView(meta.buffer);
+    dv.setUint32(0, this.frameId, false);
+    dv.setUint32(4, Date.now() % 0xFFFFFFFF, false);
+    const pixels = new Uint8Array(ledCount*4);
+    for(let i=0;i<ledCount;i++){
+      pixels[i*4]=r; pixels[i*4+1]=g; pixels[i*4+2]=b; pixels[i*4+3]=a;
+    }
+    const msg = new Uint8Array(header.length+meta.length+pixels.length);
+    msg.set(header,0); msg.set(meta,header.length); msg.set(pixels,header.length+meta.length);
+    try{ this.ws.send(msg.buffer); return true; }catch(e){ return false; }
+  }
+  sendStreamStop(){
+    if(!this.isOpen) return;
+    const msg = new Uint8Array([0x01,0x03]);
+    try{ this.ws.send(msg.buffer); }catch(e){}
+  }
+}
+
+/* ============================================================
+   Iconos SVG
+   ============================================================ */
+const ICONS = {
+  back: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>',
+  plus: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
+  trash: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0l-1 14a2 2 0 01-2 2H7a2 2 0 01-2-2L4 6h16z"/></svg>',
+  power: '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v9"/><path d="M18.4 6.6a9 9 0 11-12.8 0"/></svg>',
+  sun: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4.5"/><path d="M12 2.5v2.5M12 19v2.5M4.2 4.2l1.8 1.8M18 18l1.8 1.8M2.5 12H5M19 12h2.5M4.2 19.8L6 18M18 6l1.8-1.8"/></svg>',
+  moon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M20.5 14.7A8.5 8.5 0 019.3 3.5a.6.6 0 00-.7-.8A9.5 9.5 0 1021.3 15.4a.6.6 0 00-.8-.7z"/><path d="M18.5 3.2l.5 1.4 1.4.5-1.4.5-.5 1.4-.5-1.4-1.4-.5 1.4-.5z"/></svg>',
+  chevron: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>',
+  device: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="2" width="16" height="20" rx="3"/><path d="M9 18h6"/></svg>',
+  wifi_off: '<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l22 22M8.5 16.5a5 5 0 017 0M5 12.5a10 10 0 013.6-2.3M19 12.5a10 10 0 00-2.5-1.9M12 20h.01"/></svg>',
+  fx_rainbow: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke-linecap="round"><path d="M3 18a9 9 0 0118 0" stroke="#ff5f6d" stroke-width="2"/><path d="M6 18a6 6 0 0112 0" stroke="#ffc371" stroke-width="2"/><path d="M9 18a3 3 0 016 0" stroke="#4bde6e" stroke-width="2"/></svg>',
+  fx_breathe: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="3" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="7" opacity="0.5"/><circle cx="12" cy="12" r="10" opacity="0.25"/></svg>',
+  fx_chase: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h5M9 6l6 6-6 6" opacity="0.4"/><path d="M13 6l6 6-6 6"/></svg>',
+  fx_sparkle: '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8z"/></svg>',
+  fx_fire: '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2c1 3-2 4-2 7a4 4 0 008 0c0-1-.5-2-.5-2 2 1 3.5 3.5 3.5 6a7 7 0 11-14 0c0-4 2-6 3-7.5C10.5 4 11 3 12 2z"/></svg>',
+};
+
+/* ============================================================
+   Datos de efectos disponibles (según API.md)
+   ============================================================ */
+const EFFECTS = [
+  { id:'rainbow', name:'Arcoíris', desc:'Arcoíris animado que se desplaza', icon:ICONS.fx_rainbow, iconBg:'linear-gradient(135deg,#2a1a2e,#1a1e2e)', color1:false, color2:false, intensity:false },
+  { id:'breathe', name:'Respiración', desc:'Pulso suave de un color', icon:ICONS.fx_breathe, iconBg:'#20242c', color1:true, color2:false, intensity:false },
+  { id:'chase', name:'Persecución', desc:'Cometa que recorre la tira', icon:ICONS.fx_chase, iconBg:'#20242c', color1:true, color2:true, intensity:true, intensityLabel:'Largo de cola' },
+  { id:'sparkle', name:'Destellos', desc:'Chispas aleatorias sobre un fondo', icon:ICONS.fx_sparkle, iconBg:'#26241c', color1:true, color2:true, intensity:true, intensityLabel:'Densidad' },
+  { id:'fire', name:'Fuego', desc:'Simulación de llamas', icon:ICONS.fx_fire, iconBg:'#2c1c18', color1:false, color2:false, intensity:true, intensityLabel:'Intensidad de llamas' },
+];
+
+const DEFAULT_SCENE_PRESETS = null; // el usuario crea sus propias escenas
+
+/* ============================================================
+   Estado de la aplicación
+   ============================================================ */
+const state = {
+  route: 'devices',          // 'devices' | 'control'
+  devices: Store.getDevices(),
+  deviceStatus: {},          // id -> 'online' | 'offline' | 'checking'
+  currentDeviceId: null,
+  activeTab: 'home',         // 'scenes' | 'home' | 'animations'
+  modal: null,                // 'add-device' | null
+  ledCount: 12,
+  hue: 350, sat: 0.85, val: 0.85,
+  brightness: 180,
+  isOn: true,
+  favorites: [],
+  scenes: [],
+  nightMode: false,
+  nightSaved: null,
+  openFx: null,
+  fxParams: {},
+  toast: null,
+};
+
+let socket = null;
+let statusPollTimer = null;
+let toastTimer = null;
+
+function currentDevice(){ return state.devices.find(d=>d.id===state.currentDeviceId) || null; }
+function currentRgb(){ return hsvToRgb(state.hue, state.sat, state.val); }
+
+/* ============================================================
+   Sondeo de estado (online / offline)
+   ============================================================ */
+async function pollDeviceStatus(device){
+  state.deviceStatus[device.id] = state.deviceStatus[device.id] || 'checking';
+  try{
+    await apiGet(device.ip, '/api/device/info', 3500);
+    state.deviceStatus[device.id] = 'online';
+  }catch(e){
+    state.deviceStatus[device.id] = 'offline';
+  }
+  render();
+}
+function pollAllDevices(){
+  state.devices.forEach(d => pollDeviceStatus(d));
+}
+function startStatusPolling(){
+  stopStatusPolling();
+  pollAllDevices();
+  statusPollTimer = setInterval(pollAllDevices, 6000);
+}
+function stopStatusPolling(){
+  if(statusPollTimer){ clearInterval(statusPollTimer); statusPollTimer=null; }
+}
+
+/* ============================================================
+   Toast
+   ============================================================ */
+function showToast(msg){
+  state.toast = msg;
+  render();
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>{ state.toast=null; render(); }, 2200);
+}
+
+/* ============================================================
+   Navegación
+   ============================================================ */
+function openDevice(id){
+  const device = state.devices.find(d=>d.id===id);
+  if(!device) return;
+  state.currentDeviceId = id;
+  state.route = 'control';
+  state.activeTab = 'home';
+  state.favorites = Store.getFavorites(id);
+  state.scenes = Store.getScenes(id);
+  state.isOn = true;
+  state.openFx = null;
+  render();
+
+  apiGet(device.ip, '/api/device/info').then(info=>{
+    if(info && info.led_count) state.ledCount = info.led_count;
+    render();
+  }).catch(()=>{});
+  apiGet(device.ip, '/api/led/brightness').then(b=>{
+    if(typeof b.brightness === 'number'){ state.brightness = b.brightness; render(); }
+  }).catch(()=>{});
+
+  connectSocket(device.ip);
+}
+function backToDevices(){
+  disconnectSocket();
+  state.route = 'devices';
+  state.currentDeviceId = null;
+  render();
+}
+function connectSocket(ip){
+  disconnectSocket();
+  socket = new LedSocket(ip);
+  socket.onOpen = () => render();
+  socket.onClose = () => render();
+  socket.connect();
+}
+function disconnectSocket(){
+  if(socket){ socket.close(); socket=null; }
+}
+
+/* ============================================================
+   Acciones de color / brillo
+   ============================================================ */
+const sendColorThrottled = throttle(()=>{
+  if(!socket) return;
+  const [r,g,b] = currentRgb();
+  socket.sendStaticColor(r,g,b,state.ledCount);
+}, 55);
+
+function applyColorFromWheel(){
+  state.isOn = true;
+  sendColorThrottled();
+  render();
+}
+
+function setBrightnessRemote(value){
+  const device = currentDevice();
+  if(!device) return;
+  apiPost(device.ip, '/api/led/brightness', { brightness: value }).catch(()=>{
+    showToast('No se pudo actualizar el brillo');
+  });
+}
+const setBrightnessThrottled = throttle((v)=>setBrightnessRemote(v), 150);
+
+function togglePower(){
+  const device = currentDevice();
+  if(!device) return;
+  state.isOn = !state.isOn;
+  if(state.isOn){
+    sendColorThrottled();
+  } else {
+    apiPost(device.ip, '/api/led/effect', { effect:'off' }).catch(()=>{});
+    if(socket) socket.sendStreamStop();
+  }
+  render();
+}
+
+/* ============================================================
+   Favoritos
+   ============================================================ */
+function addFavorite(){
+  const hex = rgbToHex(...currentRgb());
+  if(state.favorites.includes(hex)){ showToast('Ese color ya está guardado'); return; }
+  if(state.favorites.length>=8){ showToast('Máximo 8 colores favoritos'); return; }
+  state.favorites.push(hex);
+  Store.saveFavorites(state.currentDeviceId, state.favorites);
+  render();
+}
+function selectFavorite(hex){
+  const [r,g,b] = hexToRgb(hex);
+  const [h,s,v] = rgbToHsv(r,g,b);
+  state.hue=h; state.sat=s; state.val=v;
+  applyColorFromWheel();
+}
+function removeFavorite(hex){
+  state.favorites = state.favorites.filter(f=>f!==hex);
+  Store.saveFavorites(state.currentDeviceId, state.favorites);
+  render();
+}
+
+/* ============================================================
+   Escenas
+   ============================================================ */
+function createScene(){
+  const name = prompt('Nombre de la escena:', `Escena ${state.scenes.length+1}`);
+  if(!name) return;
+  const hex = rgbToHex(...currentRgb());
+  state.scenes.push({ id:'s'+Date.now(), name, color:hex, brightness: state.brightness });
+  Store.saveScenes(state.currentDeviceId, state.scenes);
+  render();
+}
+function applyScene(scene){
+  const [r,g,b] = hexToRgb(scene.color);
+  const [h,s,v] = rgbToHsv(r,g,b);
+  state.hue=h; state.sat=s; state.val=v;
+  state.brightness = scene.brightness;
+  state.isOn = true;
+  sendColorThrottled();
+  setBrightnessRemote(scene.brightness);
+  render();
+  showToast(`Escena "${scene.name}" aplicada`);
+}
+function removeScene(id){
+  state.scenes = state.scenes.filter(s=>s.id!==id);
+  Store.saveScenes(state.currentDeviceId, state.scenes);
+  render();
+}
+
+/* ============================================================
+   Modo noche
+   ============================================================ */
+function toggleNightMode(){
+  const device = currentDevice();
+  if(!device) return;
+  state.nightMode = !state.nightMode;
+  if(state.nightMode){
+    state.nightSaved = { hue:state.hue, sat:state.sat, val:state.val, brightness: state.brightness };
+    const nightHex = 'ffcc66';
+    const nightBrightness = Math.round(255*0.05);
+    apiPost(device.ip, '/api/led/effect', { effect:'static', color1:nightHex, brightness:nightBrightness }).catch(()=>{});
+    apiPost(device.ip, '/api/led/brightness', { brightness: nightBrightness }).catch(()=>{});
+    const [r,g,b] = hexToRgb(nightHex);
+    const [h,s,v] = rgbToHsv(r,g,b);
+    state.hue=h; state.sat=s; state.val=v; state.brightness=nightBrightness;
+  } else if(state.nightSaved){
+    state.hue=state.nightSaved.hue; state.sat=state.nightSaved.sat; state.val=state.nightSaved.val;
+    state.brightness = state.nightSaved.brightness;
+    sendColorThrottled();
+    setBrightnessRemote(state.brightness);
+    state.nightSaved = null;
+  }
+  render();
+}
+
+/* ============================================================
+   Animaciones (efectos con parámetros)
+   ============================================================ */
+function fxDefaults(fx){
+  return state.fxParams[fx.id] || (state.fxParams[fx.id] = {
+    speed:128, intensity:128, color1:'ff3366', color2:'0000ff'
+  });
+}
+function toggleFxOpen(id){
+  state.openFx = state.openFx===id ? null : id;
+  render();
+}
+function applyFx(fx){
+  const device = currentDevice();
+  if(!device) return;
+  const p = fxDefaults(fx);
+  const payload = { effect: fx.id, speed:p.speed, brightness: state.brightness };
+  if(fx.intensity) payload.intensity = p.intensity;
+  if(fx.color1) payload.color1 = p.color1;
+  if(fx.color2) payload.color2 = p.color2;
+  apiPost(device.ip, '/api/led/effect', payload).then(res=>{
+    if(res && res.success===false){ showToast('El dispositivo rechazó el efecto'); }
+    else { showToast(`"${fx.name}" activado`); }
+  }).catch(()=>showToast('No se pudo aplicar la animación'));
+}
+const applyFxThrottled = throttle((fx)=>applyFx(fx), 300);
+
+/* ============================================================
+   Dispositivos: agregar / eliminar
+   ============================================================ */
+function openAddDeviceModal(){ state.modal='add-device'; render(); }
+function closeModal(){ state.modal=null; render(); }
+
+async function submitAddDevice(name, ip){
+  const errEl = document.getElementById('add-device-error');
+  ip = ip.trim();
+  if(!ip){ if(errEl) errEl.textContent='Ingresa la IP o el hostname del dispositivo.'; return; }
+  const id = 'd'+Date.now();
+  let finalName = name.trim();
+  if(errEl) errEl.textContent = 'Conectando…';
+  try{
+    const info = await apiGet(ip, '/api/system/info', 4000);
+    if(!finalName) finalName = (info.info && info.info.device_name) || 'Moon Speaker';
+  }catch(e){
+    if(!finalName) finalName = 'Moon Speaker';
+    if(errEl) errEl.textContent = 'No respondió todavía — se agregará de todas formas.';
+  }
+  state.devices.push({ id, name: finalName, ip });
+  Store.saveDevices(state.devices);
+  state.modal = null;
+  render();
+  pollDeviceStatus(state.devices[state.devices.length-1]);
+}
+function deleteDevice(id){
+  const device = state.devices.find(d=>d.id===id);
+  if(!device) return;
+  if(!confirm(`¿Eliminar "${device.name}" de tus dispositivos?`)) return;
+  state.devices = state.devices.filter(d=>d.id!==id);
+  Store.saveDevices(state.devices);
+  delete state.deviceStatus[id];
+  render();
+}
+
+/* ============================================================
+   Render: pantalla de dispositivos
+   ============================================================ */
+function renderDevicesScreen(){
+  const list = state.devices;
+  const items = list.map(d=>{
+    const status = state.deviceStatus[d.id] || 'checking';
+    return `
+    <div class="device-card" role="button" tabindex="0" data-action="open-device" data-id="${d.id}">
+      <div class="device-avatar"></div>
+      <div class="device-info">
+        <div class="device-name">${escapeHtml(d.name)} <span class="status-dot ${status}" title="${status}"></span></div>
+        <div class="device-ip">${escapeHtml(d.ip)}</div>
+      </div>
+      <button class="device-delete" data-action="delete-device" data-id="${d.id}" aria-label="Eliminar ${escapeHtml(d.name)}">${ICONS.trash}</button>
+    </div>`;
+  }).join('');
+
+  const empty = `
+    <div class="empty-state">
+      <div class="empty-icon">${ICONS.device}</div>
+      <p>Todavía no agregaste ningún dispositivo.<br>Toca "Agregar dispositivo" para empezar.</p>
+    </div>`;
+
+  return `
+  <div class="screen">
+    <div class="devices-header">
+      <div class="wordmark">MOON</div>
+      <div class="devices-sub">Selecciona un dispositivo</div>
+    </div>
+    <div class="scroll">
+      <div class="device-list">${list.length ? items : empty}</div>
+    </div>
+    <button class="add-device-btn" data-action="open-add-device">${ICONS.plus} Agregar dispositivo</button>
+    ${state.modal==='add-device' ? renderAddDeviceModal() : ''}
+  </div>`;
+}
+
+function renderAddDeviceModal(){
+  return `
+  <div class="modal-overlay" data-action="close-modal-bg">
+    <div class="modal-sheet" data-stop>
+      <div class="modal-title">Nuevo dispositivo</div>
+      <div class="modal-sub">Ingresa la dirección IP de tu Moon Speaker en la red local.</div>
+      <div class="field">
+        <label for="dev-name">Nombre (opcional)</label>
+        <input id="dev-name" type="text" placeholder="Ej. Sala, Cuarto…" autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="dev-ip">IP o hostname</label>
+        <input id="dev-ip" type="text" placeholder="192.168.68.64" autocomplete="off" inputmode="decimal">
+        <div class="field-error" id="add-device-error"></div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" data-action="close-modal">Cancelar</button>
+        <button class="btn btn-primary" data-action="confirm-add-device">Agregar</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+/* ============================================================
+   Render: pantalla de control
+   ============================================================ */
+function renderControlScreen(){
+  const device = currentDevice();
+  if(!device){ state.route='devices'; return renderDevicesScreen(); }
+  const status = state.deviceStatus[device.id] || 'checking';
+
+  return `
+  <div class="screen">
+    <div class="control-header">
+      <button class="icon-btn" data-action="back" aria-label="Volver">${ICONS.back}</button>
+      <div class="control-title-wrap">
+        <div class="control-title">${escapeHtml(device.name)} <span class="status-dot ${status}"></span></div>
+        <div class="control-sub">${escapeHtml(device.ip)}</div>
+      </div>
+      <div style="width:38px;"></div>
+    </div>
+
+    ${status==='offline' ? `<div class="conn-banner">No se puede conectar al dispositivo. Verifica que esté encendido y en la misma red.</div>` : ''}
+
+    <div class="nav-menu">
+      <button class="nav-item ${state.activeTab==='scenes'?'active':''}" data-action="tab" data-tab="scenes">Escenas</button>
+      <button class="nav-item ${state.activeTab==='home'?'active':''}" data-action="tab" data-tab="home">Inicio</button>
+      <button class="nav-item ${state.activeTab==='animations'?'active':''}" data-action="tab" data-tab="animations">Animaciones</button>
+    </div>
+
+    <div class="scroll">
+      <div class="tab-content">
+        ${state.activeTab==='home' ? renderHomeTab() : ''}
+        ${state.activeTab==='scenes' ? renderScenesTab() : ''}
+        ${state.activeTab==='animations' ? renderAnimationsTab() : ''}
+      </div>
+    </div>
+    <div class="toast ${state.toast?'show':''}">${state.toast?escapeHtml(state.toast):''}</div>
+  </div>`;
+}
+
+function renderHomeTab(){
+  const [r,g,b] = currentRgb();
+  const hex = rgbToHex(r,g,b).toUpperCase();
+  const pureHueRgb = hsvToRgb(state.hue,1,1);
+  const pureHueHex = rgbToHex(...pureHueRgb);
+
+  // posición del knob del anillo (hue) — radio ~0.925 del contenedor (centro del grosor del anillo)
+  const ringAngleRad = (state.hue - 90) * Math.PI/180;
+  const ringR = 0.925;
+  const ringX = 50 + 50*ringR*Math.cos(ringAngleRad);
+  const ringY = 50 + 50*ringR*Math.sin(ringAngleRad);
+
+  // posición del knob del disco (saturación = x, valor = y invertido), dentro del círculo inscrito
+  const discX = state.sat;              // 0..1 izquierda->derecha
+  const discY = 1 - state.val;          // 0..1 arriba->abajo
+  const dx = (discX-0.5)*2, dy=(discY-0.5)*2;
+  const dist = Math.min(1, Math.sqrt(dx*dx+dy*dy));
+  let cdx=dx, cdy=dy;
+  if(dist>0.96){ cdx = dx/dist*0.96; cdy = dy/dist*0.96; }
+  const discPctX = 50 + cdx*50;
+  const discPctY = 50 + cdy*50;
+
+  const favRow = state.favorites.map(hexColor=>`
+    <button class="fav-swatch ${hexColor.toUpperCase()===hex?'selected':''}" style="background:${hexColor}"
+      data-action="select-fav" data-hex="${hexColor}"
+      oncontextmenu="return false;" data-longpress="remove-fav"
+      aria-label="Color favorito ${hexColor}"></button>`).join('');
+
+  return `
+  <div class="wheel-card ${state.isOn?'':'is-off'}">
+    <button class="power-toggle ${state.isOn?'is-on':''}" data-action="toggle-power" aria-label="Encender o apagar">${ICONS.power}</button>
+    <div class="wheel-wrap" id="colorWheel" data-ledcount="${state.ledCount}">
+      <div class="wheel-ring"></div>
+      <div class="wheel-ring-mask"></div>
+      <div class="wheel-disc" id="wheelDisc" style="background:
+          linear-gradient(to top, #000, transparent),
+          linear-gradient(to right, #fff, ${pureHueHex})">
+      </div>
+      <div class="wheel-knob" id="ringKnob" style="left:${ringX}%; top:${ringY}%; background:${pureHueHex};"></div>
+      <div class="wheel-knob-inner" id="discKnob" style="left:${discPctX}%; top:${discPctY}%; background:${hex};"></div>
+    </div>
+    <div class="hex-readout">${hex}</div>
+  </div>
+
+  <div class="section-label">Colores favoritos</div>
+  <div class="favorites-row">
+    ${favRow}
+    <button class="fav-add" data-action="add-fav" aria-label="Guardar color actual">${ICONS.plus}</button>
+  </div>
+
+  <div class="section-label">Brillo</div>
+  <div class="brightness-row">
+    <span class="icon-static">${ICONS.sun}</span>
+    <input type="range" id="brightnessRange" min="0" max="255" value="${state.brightness}" data-action="brightness">
+    <span class="brightness-value">${Math.round(state.brightness/255*100)}%</span>
+  </div>
+
+  <div class="night-card">
+    <div class="night-icon">${ICONS.moon}</div>
+    <div class="night-body">
+      <div class="night-title">Modo noche</div>
+      <div class="night-desc">El brillo bajará a un 5% y el color cambiará a un amarillo cálido.</div>
+    </div>
+    <button class="switch ${state.nightMode?'checked':''}" data-action="toggle-night" aria-label="Activar modo noche" aria-pressed="${state.nightMode}"></button>
+  </div>`;
+}
+
+function renderScenesTab(){
+  const cards = state.scenes.map(s=>`
+    <button class="scene-card" data-action="apply-scene" data-id="${s.id}" data-longpress="remove-scene">
+      <div class="scene-swatch" style="background:${s.color}"></div>
+      <div class="scene-name">${escapeHtml(s.name)}</div>
+      <div class="scene-meta">${Math.round(s.brightness/255*100)}% brillo</div>
+    </button>`).join('');
+
+  return `
+  <div class="section-label" style="margin-top:2px;">Tus escenas</div>
+  <div class="scenes-grid">
+    ${cards}
+    <button class="scene-card scene-card-new" data-action="new-scene">${ICONS.plus} Nueva escena</button>
+  </div>
+  ${state.scenes.length ? `<div class="control-sub" style="margin-top:16px;text-align:left;">Mantén presionada una escena para eliminarla.</div>` : `<div class="control-sub" style="margin-top:16px;text-align:left;">Ajusta un color en "Inicio" y guárdalo aquí como escena.</div>`}
+  `;
+}
+
+function renderAnimationsTab(){
+  const cards = EFFECTS.map(fx=>{
+    const p = fxDefaults(fx);
+    const open = state.openFx===fx.id;
+    return `
+    <div class="fx-card ${open?'open':''}">
+      <button class="fx-head" data-action="toggle-fx" data-id="${fx.id}">
+        <div class="fx-icon" style="background:${fx.iconBg}">${fx.icon}</div>
+        <div>
+          <div class="fx-name">${fx.name}</div>
+          <div class="fx-desc">${fx.desc}</div>
+        </div>
+        <span class="fx-chevron">${ICONS.chevron}</span>
+      </button>
+      <div class="fx-body">
+        <div class="fx-row">
+          <div class="fx-row-label"><span>Velocidad</span><span>${p.speed}</span></div>
+          <input type="range" min="0" max="255" value="${p.speed}" data-action="fx-speed" data-id="${fx.id}">
+        </div>
+        ${fx.intensity ? `
+        <div class="fx-row">
+          <div class="fx-row-label"><span>${fx.intensityLabel||'Intensidad'}</span><span>${p.intensity}</span></div>
+          <input type="range" min="0" max="255" value="${p.intensity}" data-action="fx-intensity" data-id="${fx.id}">
+        </div>` : ''}
+        ${(fx.color1 || fx.color2) ? `
+        <div class="fx-row">
+          <div class="fx-row-label"><span>Colores</span><span></span></div>
+          <div class="fx-colors">
+            ${fx.color1 ? `<label class="fx-color-input"><input type="color" value="#${p.color1}" data-action="fx-color1" data-id="${fx.id}"><span>Color 1</span></label>`:''}
+            ${fx.color2 ? `<label class="fx-color-input"><input type="color" value="#${p.color2}" data-action="fx-color2" data-id="${fx.id}"><span>Color 2</span></label>`:''}
+          </div>
+        </div>` : ''}
+        <button class="fx-apply-btn" data-action="apply-fx" data-id="${fx.id}">Aplicar animación</button>
+      </div>
+    </div>`;
+  }).join('');
+  return `<div class="section-label" style="margin-top:2px;">Efectos animados</div><div class="fx-list">${cards}</div>`;
+}
+
+function escapeHtml(str){
+  return String(str).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+/* ============================================================
+   Render principal
+   ============================================================ */
+const app = document.getElementById('app');
+function render(){
+  app.innerHTML = state.route==='devices' ? renderDevicesScreen() : renderControlScreen();
+  attachDynamicHandlers();
+}
+
+function attachDynamicHandlers(){
+  const wheel = document.getElementById('colorWheel');
+  if(wheel) bindWheel(wheel);
+
+  const brightness = document.getElementById('brightnessRange');
+  if(brightness){
+    brightness.addEventListener('input', (e)=>{
+      state.brightness = parseInt(e.target.value,10);
+      const label = brightness.parentElement.querySelector('.brightness-value');
+      if(label) label.textContent = Math.round(state.brightness/255*100)+'%';
+      setBrightnessThrottled(state.brightness);
+    });
+    brightness.addEventListener('change', (e)=>{ setBrightnessRemote(parseInt(e.target.value,10)); });
+  }
+
+  // inputs dentro de tarjetas de efectos
+  document.querySelectorAll('[data-action="fx-speed"]').forEach(el=>{
+    el.addEventListener('input', e=>{
+      const id=el.dataset.id; fxDefaults(EFFECTS.find(f=>f.id===id)).speed = parseInt(e.target.value,10);
+      const label = el.parentElement.querySelector('.fx-row-label span:last-child');
+      if(label) label.textContent = e.target.value;
+    });
+  });
+  document.querySelectorAll('[data-action="fx-intensity"]').forEach(el=>{
+    el.addEventListener('input', e=>{
+      const id=el.dataset.id; fxDefaults(EFFECTS.find(f=>f.id===id)).intensity = parseInt(e.target.value,10);
+      const label = el.parentElement.querySelector('.fx-row-label span:last-child');
+      if(label) label.textContent = e.target.value;
+    });
+  });
+  document.querySelectorAll('[data-action="fx-color1"]').forEach(el=>{
+    el.addEventListener('input', e=>{
+      const id=el.dataset.id; fxDefaults(EFFECTS.find(f=>f.id===id)).color1 = e.target.value.replace('#','');
+    });
+  });
+  document.querySelectorAll('[data-action="fx-color2"]').forEach(el=>{
+    el.addEventListener('input', e=>{
+      const id=el.dataset.id; fxDefaults(EFFECTS.find(f=>f.id===id)).color2 = e.target.value.replace('#','');
+    });
+  });
+
+  // long-press para eliminar favoritos / escenas
+  document.querySelectorAll('[data-longpress]').forEach(el=>{
+    bindLongPress(el);
+  });
+}
+
+function bindLongPress(el){
+  let timer=null;
+  const start = ()=>{ timer=setTimeout(()=>{
+    const action = el.dataset.longpress;
+    if(action==='remove-fav') removeFavorite(el.dataset.hex);
+    if(action==='remove-scene'){ if(confirm('¿Eliminar esta escena?')) removeScene(el.dataset.id); }
+  }, 550); };
+  const cancel = ()=>{ clearTimeout(timer); };
+  el.addEventListener('pointerdown', start);
+  el.addEventListener('pointerup', cancel);
+  el.addEventListener('pointerleave', cancel);
+  el.addEventListener('contextmenu', (e)=>{
+    e.preventDefault();
+    const action = el.dataset.longpress;
+    if(action==='remove-fav') removeFavorite(el.dataset.hex);
+    if(action==='remove-scene'){ if(confirm('¿Eliminar esta escena?')) removeScene(el.dataset.id); }
+  });
+}
+
+function bindWheel(wheel){
+  const ring = wheel.querySelector('.wheel-ring');
+  const disc = wheel.querySelector('.wheel-disc');
+  let mode = null; // 'hue' | 'sat'
+
+  function rectInfo(){
+    const r = wheel.getBoundingClientRect();
+    return { cx: r.left + r.width/2, cy: r.top + r.height/2, radius: r.width/2 };
+  }
+  function updateHueFromPoint(x,y){
+    const { cx, cy } = rectInfo();
+    const ang = Math.atan2(y-cy, x-cx) * 180/Math.PI;
+    state.hue = ((ang + 90) % 360 + 360) % 360;
+  }
+  function updateSatValFromPoint(x,y){
+    const { cx, cy, radius } = rectInfo();
+    const discRadius = radius * 0.85; // inset:15%
+    let dx = (x-cx)/discRadius, dy = (y-cy)/discRadius;
+    const dist = Math.sqrt(dx*dx+dy*dy);
+    if(dist>1){ dx/=dist; dy/=dist; }
+    state.sat = clamp((dx+1)/2, 0, 1);
+    state.val = clamp(1-((dy+1)/2), 0, 1);
+  }
+  function paintLive(){
+    const [r,g,b] = currentRgb();
+    const hex = rgbToHex(r,g,b);
+    const pureHue = rgbToHex(...hsvToRgb(state.hue,1,1));
+    const ringKnob = document.getElementById('ringKnob');
+    const discKnob = document.getElementById('discKnob');
+    const hexReadout = wheel.parentElement.querySelector('.hex-readout');
+    if(ringKnob){
+      const ang = (state.hue-90)*Math.PI/180;
+      ringKnob.style.left = (50+50*0.925*Math.cos(ang))+'%';
+      ringKnob.style.top = (50+50*0.925*Math.sin(ang))+'%';
+      ringKnob.style.background = pureHue;
+    }
+    if(discKnob){
+      const dx=(state.sat-0.5)*2, dy=((1-state.val)-0.5)*2;
+      discKnob.style.left = (50+dx*50)+'%';
+      discKnob.style.top = (50+dy*50)+'%';
+      discKnob.style.background = hex;
+    }
+    if(disc) disc.style.background = `linear-gradient(to top, #000, transparent), linear-gradient(to right, #fff, ${pureHue})`;
+    if(hexReadout) hexReadout.textContent = hex.toUpperCase();
+    const favSelected = wheel.parentElement.parentElement.querySelectorAll('.fav-swatch');
+    favSelected.forEach(f=>f.classList.toggle('selected', f.dataset.hex && f.dataset.hex.toLowerCase()===hex.toLowerCase()));
+  }
+
+  function pointerDown(e){
+    const { cx, cy, radius } = rectInfo();
+    const dist = Math.hypot(e.clientX-cx, e.clientY-cy);
+    if(dist <= radius*0.85){ mode='sat'; updateSatValFromPoint(e.clientX,e.clientY); }
+    else if(dist <= radius){ mode='hue'; updateHueFromPoint(e.clientX,e.clientY); }
+    else { return; }
+    wheel.setPointerCapture(e.pointerId);
+    paintLive();
+    applyColorFromWheelLive();
+    e.preventDefault();
+  }
+  function pointerMove(e){
+    if(!mode) return;
+    if(mode==='hue') updateHueFromPoint(e.clientX,e.clientY);
+    else updateSatValFromPoint(e.clientX,e.clientY);
+    paintLive();
+    applyColorFromWheelLive();
+  }
+  function pointerUp(e){
+    if(!mode) return;
+    mode=null;
+    render();
+  }
+  function applyColorFromWheelLive(){
+    state.isOn = true;
+    sendColorThrottled();
+  }
+
+  wheel.addEventListener('pointerdown', pointerDown);
+  wheel.addEventListener('pointermove', pointerMove);
+  wheel.addEventListener('pointerup', pointerUp);
+  wheel.addEventListener('pointercancel', pointerUp);
+}
+
+/* ============================================================
+   Delegación de eventos (clicks)
+   ============================================================ */
+app.addEventListener('click', (e)=>{
+  const target = e.target.closest('[data-action]');
+  if(!target) return;
+  const action = target.dataset.action;
+
+  switch(action){
+    case 'open-device': openDevice(target.dataset.id); break;
+    case 'delete-device': e.stopPropagation(); deleteDevice(target.dataset.id); break;
+    case 'open-add-device': openAddDeviceModal(); break;
+    case 'close-modal': closeModal(); break;
+    case 'close-modal-bg': if(!e.target.closest('[data-stop]')) closeModal(); break;
+    case 'confirm-add-device': {
+      const name = document.getElementById('dev-name').value;
+      const ip = document.getElementById('dev-ip').value;
+      submitAddDevice(name, ip);
+      break;
+    }
+    case 'back': backToDevices(); break;
+    case 'tab': state.activeTab = target.dataset.tab; state.openFx=null; render(); break;
+    case 'toggle-power': togglePower(); break;
+    case 'add-fav': addFavorite(); break;
+    case 'select-fav': selectFavorite(target.dataset.hex); break;
+    case 'toggle-night': toggleNightMode(); break;
+    case 'new-scene': createScene(); break;
+    case 'apply-scene': {
+      const scene = state.scenes.find(s=>s.id===target.dataset.id);
+      if(scene) applyScene(scene);
+      break;
+    }
+    case 'toggle-fx': toggleFxOpen(target.dataset.id); break;
+    case 'apply-fx': {
+      const fx = EFFECTS.find(f=>f.id===target.dataset.id);
+      if(fx) applyFx(fx);
+      break;
+    }
+  }
+});
+
+window.addEventListener('beforeunload', ()=>{ if(socket) socket.sendStreamStop(); });
+
+/* ============================================================
+   Inicio
+   ============================================================ */
+render();
+startStatusPolling();
+
+})();
+</script>
+</body>
+</html>
