@@ -19,7 +19,6 @@
 
 #include "audio_output.h"
 #include "dac.h"
-#include "led.h"
 #include "rtsp_events.h"
 #include "settings.h"
 
@@ -255,9 +254,6 @@ static void bt_a2dp_data_cb(const uint8_t *data, uint32_t len) {
   if (rb == NULL || len == 0) {
     return;
   }
-
-  // Feed LED VU meter from the decoded PCM
-  led_audio_feed((const int16_t *)data, len / 4);
 
   size_t free_size = xRingbufferGetCurFreeSize(rb);
 

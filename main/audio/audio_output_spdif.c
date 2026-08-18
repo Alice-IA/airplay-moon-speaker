@@ -29,7 +29,6 @@
 
 #include "audio_receiver.h"
 #include "audio_resample.h"
-#include "led.h"
 #include "driver/i2s_std.h"
 #include "esp_check.h"
 #include "soc/soc_caps.h"
@@ -252,11 +251,9 @@ static void playback_task(void *arg) {
         play_buf = resample_buf;
       }
       apply_volume(play_buf, play_samples * 2);
-      led_audio_feed(play_buf, play_samples);
       spdif_write(play_buf, play_samples * 2 * sizeof(int16_t));
       taskYIELD();
     } else {
-      led_audio_feed(silence, FRAME_SAMPLES);
       spdif_write(silence, (size_t)FRAME_SAMPLES * 2 * sizeof(int16_t));
       vTaskDelay(1);
     }

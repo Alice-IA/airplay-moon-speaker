@@ -37,11 +37,9 @@ set( SRC_FILES
     "network/web_server.c"
     "network/ota.c"
     "network/dns_server.c"
-    "network/log_stream.c"
-    "led.c"
     "led_strip_ctrl.c"
     "led_anim_stream.c"
-    "audio/eq_events.c"
+    "moon_mqtt.c"
     "buttons.c"
     "playback_control.c"
     "dacp_client.c"
@@ -93,12 +91,10 @@ set( DEPS
     esp_driver_ledc
     boards
     dac
-    dac_tas58xx
-    dac_tas57xx
-    display
     audio-resampler
     esp_eth
     spiffs_storage
+    mqtt
 )
 
 # Bluetooth component only needed when A2DP is enabled

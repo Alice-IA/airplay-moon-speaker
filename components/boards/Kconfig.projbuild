@@ -83,24 +83,6 @@ menu "Board Configuration"
 
     menu "Pin Configuration"
         menu "LED GPIOs"
-            config LED_STATUS_GPIO
-                int "Status LED GPIO"
-                default -1
-                help
-                    GPIO for status LED (single color). Set to -1 to disable.
-
-            config LED_ERROR_GPIO
-                int "Error LED GPIO"
-                default -1
-                help
-                    GPIO for error LED. Set to -1 to disable.
-
-            config LED_RGB_GPIO
-                int "RGB LED GPIO (WS2812)"
-                default -1
-                help
-                    GPIO for addressable RGB LED (WS2812). Set to -1 to disable.
-
             config LED_ANIM_GPIO
                 int "LED animation strip GPIO (WS2812)"
                 default -1
@@ -219,99 +201,6 @@ menu "Board Configuration"
                 default 0
                 help
                     Active level for mute GPIO (0=active low, 1=active high).
-        endmenu
-
-        menu "SPI Display Configuration"
-            config SPI_SCLK_IO
-                int "SPI Clock GPIO (display)"
-                default 38
-                depends on BOARD_WAVESHARE_ESP32S3_TOUCH_LCD_154
-                help
-                    SPI clock GPIO for display.
-
-            config SPI_MOSI_IO
-                int "SPI MOSI GPIO (display)"
-                default 39
-                depends on BOARD_WAVESHARE_ESP32S3_TOUCH_LCD_154
-                help
-                    SPI MOSI GPIO for display.
-
-            config SPI_MISO_IO
-                int "SPI MISO GPIO (display)"
-                default -1
-                depends on BOARD_WAVESHARE_ESP32S3_TOUCH_LCD_154
-                help
-                    SPI MISO GPIO for display. Set to -1 if not used.
-
-            config SPI_CS_IO
-                int "SPI Chip Select GPIO (display)"
-                default 21
-                depends on BOARD_WAVESHARE_ESP32S3_TOUCH_LCD_154
-                help
-                    SPI chip select GPIO for display.
-
-            config SPI_DC_IO
-                int "SPI Data Command GPIO (display)"
-                default 45
-                depends on BOARD_WAVESHARE_ESP32S3_TOUCH_LCD_154
-                help
-                    SPI Data/Command GPIO for display.
-
-            config SPI_RST_IO
-                int "SPI Reset GPIO (display)"
-                default 40
-                depends on BOARD_WAVESHARE_ESP32S3_TOUCH_LCD_154
-                help
-                    SPI reset GPIO for display.
-
-            config SPI_BL_IO
-                int "SPI Backlight GPIO (display)"
-                default 46
-                depends on BOARD_WAVESHARE_ESP32S3_TOUCH_LCD_154
-                help
-                    GPIO for display backlight PWM dimming.
-
-            config I2C_TOUCH_SDA_IO
-                int "I2C SDA GPIO (touch controller)"
-                default 42
-                depends on BOARD_WAVESHARE_ESP32S3_TOUCH_LCD_154
-                help
-                    I2C SDA GPIO for touch controller (CST816S).
-
-            config I2C_TOUCH_SCL_IO
-                int "I2C SCL GPIO (touch controller)"
-                default 41
-                depends on BOARD_WAVESHARE_ESP32S3_TOUCH_LCD_154
-                help
-                    I2C SCL GPIO for touch controller (CST816S).
-
-            config I2C_TOUCH_RST_IO
-                int "I2C Touch Reset GPIO"
-                default 47
-                depends on BOARD_WAVESHARE_ESP32S3_TOUCH_LCD_154
-                help
-                    GPIO for touch controller reset line.
-
-            config I2C_TOUCH_INT_IO
-                int "I2C Touch Interrupt GPIO"
-                default 48
-                depends on BOARD_WAVESHARE_ESP32S3_TOUCH_LCD_154
-                help
-                    GPIO for touch controller interrupt line.
-
-            config LED_BL_PWM_TIMER
-                int "LED Backlight PWM Timer"
-                default 0
-                depends on BOARD_WAVESHARE_ESP32S3_TOUCH_LCD_154
-                help
-                    LEDC timer number for display backlight PWM.
-
-            config LED_BL_PWM_CHANNEL
-                int "LED Backlight PWM Channel"
-                default 0
-                depends on BOARD_WAVESHARE_ESP32S3_TOUCH_LCD_154
-                help
-                    LEDC channel number for display backlight PWM.
         endmenu
 
         menu "SPI and Ethernet Configuration"

@@ -3,7 +3,6 @@
 
 #include "audio_resample.h"
 #include "dac.h"
-#include "led.h"
 #include "settings.h"
 #include "driver/i2s_std.h"
 #include "driver/gpio.h"
@@ -152,7 +151,6 @@ static void playback_task(void *arg) {
       }
       apply_volume(play_buf, play_samples * 2);
       apply_channel_mode(play_buf, play_samples);
-      led_audio_feed(play_buf, play_samples);
       i2s_channel_write(tx_handle, play_buf, play_samples * 2 * sizeof(int16_t),
                         &written, portMAX_DELAY);
       taskYIELD();
@@ -160,7 +158,6 @@ static void playback_task(void *arg) {
       // Receiver underflow — output a frame of silence.  Block on the DMA
       // write (portMAX_DELAY) so the write itself paces the loop, instead of a
       // short timeout plus vTaskDelay(1) which produced jittery silence.
-      led_audio_feed(silence, FRAME_SAMPLES);
       i2s_channel_write(tx_handle, silence,
                         (size_t)FRAME_SAMPLES * 2 * sizeof(int16_t), &written,
                         portMAX_DELAY);

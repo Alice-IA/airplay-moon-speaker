@@ -14,7 +14,6 @@
 
 #include "audio_receiver.h"
 #include "audio_resample.h"
-#include "led.h"
 #include "esp_check.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
@@ -145,13 +144,11 @@ static void playback_task(void *arg) {
         play_buf = resample_buf;
       }
       apply_volume(play_buf, play_samples * 2);
-      led_audio_feed(play_buf, play_samples);
 
       size_t bytes = play_samples * 4; /* stereo 16-bit */
       xRingbufferSend(s_ringbuf, play_buf, bytes, portMAX_DELAY);
       taskYIELD();
     } else {
-      led_audio_feed(silence, FRAME_SAMPLES);
       /* Feed silence to keep the USB stream flowing */
       xRingbufferSend(s_ringbuf, silence, (size_t)FRAME_SAMPLES * 4,
                       pdMS_TO_TICKS(10));

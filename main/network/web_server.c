@@ -13,11 +13,9 @@
 #include "esp_wifi.h"
 
 #include "settings.h"
-#include "led.h"
 #include "wifi.h"
 #include "ethernet.h"
 #include "ota.h"
-#include "log_stream.h"
 #include "led_anim_stream.h"
 #include "rtsp_server.h"
 #include "audio_output.h"
@@ -97,97 +95,6 @@ static esp_err_t root_handler(httpd_req_t *req) {
 static esp_err_t favicon_handler(httpd_req_t *req) {
   httpd_resp_set_status(req, "204 No Content");
   httpd_resp_send(req, NULL, 0);
-  return ESP_OK;
-}
-
-static esp_err_t logs_page_handler(httpd_req_t *req) {
-  return serve_spiffs_file(req, "/spiffs/www/logs.html", "text/html");
-}
-
-static esp_err_t speedtest_page_handler(httpd_req_t *req) {
-  return serve_spiffs_file(req, "/spiffs/www/speedtest.html", "text/html");
-}
-
-// Tiny endpoint used by JS for RTT timing. Returns minimal body.
-static esp_err_t speedtest_ping_handler(httpd_req_t *req) {
-  httpd_resp_set_type(req, "text/plain");
-  httpd_resp_set_hdr(req, "Cache-Control", "no-store");
-  httpd_resp_send(req, "ok", 2);
-  return ESP_OK;
-}
-
-// Streams `bytes` octets of filler data so the browser can measure DL speed.
-// Capped to avoid pathological requests starving audio.
-#define SPEEDTEST_MAX_BYTES ((size_t)16 * 1024 * 1024)
-#define SPEEDTEST_CHUNK     2048
-
-static esp_err_t speedtest_download_handler(httpd_req_t *req) {
-  size_t bytes = (size_t)1024 * 1024;
-  char qbuf[64];
-  if (httpd_req_get_url_query_str(req, qbuf, sizeof(qbuf)) == ESP_OK) {
-    char val[16];
-    if (httpd_query_key_value(qbuf, "bytes", val, sizeof(val)) == ESP_OK) {
-      long v = strtol(val, NULL, 10);
-      if (v > 0) {
-        bytes = (size_t)v;
-      }
-    }
-  }
-  if (bytes > SPEEDTEST_MAX_BYTES) {
-    bytes = SPEEDTEST_MAX_BYTES;
-  }
-
-  // Reuse a single buffer of filler bytes. Static so we don't repeatedly
-  // hammer the heap; content is irrelevant but non-zero to thwart any
-  // compression along the way.
-  static uint8_t filler[SPEEDTEST_CHUNK];
-  static bool filler_init = false;
-  if (!filler_init) {
-    for (size_t i = 0; i < sizeof(filler); i++) {
-      filler[i] = (uint8_t)(i * 37);
-    }
-    filler_init = true;
-  }
-
-  httpd_resp_set_type(req, "application/octet-stream");
-  httpd_resp_set_hdr(req, "Cache-Control", "no-store");
-
-  size_t remaining = bytes;
-  while (remaining > 0) {
-    ssize_t n =
-        remaining < SPEEDTEST_CHUNK ? (ssize_t)remaining : SPEEDTEST_CHUNK;
-    if (httpd_resp_send_chunk(req, (const char *)filler, n) != ESP_OK) {
-      return ESP_FAIL;
-    }
-    remaining -= (size_t)n;
-  }
-  httpd_resp_send_chunk(req, NULL, 0);
-  return ESP_OK;
-}
-
-// Consumes a POST body and reports how many bytes were received.
-static esp_err_t speedtest_upload_handler(httpd_req_t *req) {
-  size_t total = req->content_len;
-  size_t got = 0;
-  uint8_t buf[SPEEDTEST_CHUNK];
-  while (got < total) {
-    size_t want = total - got;
-    if (want > sizeof(buf)) {
-      want = sizeof(buf);
-    }
-    int r = httpd_req_recv(req, (char *)buf, want);
-    if (r <= 0) {
-      if (r == HTTPD_SOCK_ERR_TIMEOUT) {
-        continue;
-      }
-      return ESP_FAIL;
-    }
-    got += (size_t)r;
-  }
-  char reply[64];
-  int n = snprintf(reply, sizeof(reply), "received=%u", (unsigned)got);
-  httpd_resp_set_type(req, "text/plain");
-  httpd_resp_send(req, reply, n);
   return ESP_OK;
 }
 
@@ -348,7 +255,7 @@ static esp_err_t device_name_handler(httpd_req_t *req) {
 
 static esp_err_t led_brightness_get_handler(httpd_req_t *req) {
   cJSON *json = cJSON_CreateObject();
-  cJSON_AddNumberToObject(json, "brightness", led_get_brightness());
+  cJSON_AddNumberToObject(json, "brightness", led_anim_stream_get_brightness());
   cJSON_AddBoolToObject(json, "success", true);
   char *json_str = cJSON_Print(json);
   httpd_resp_set_type(req, "application/json");
@@ -383,7 +290,8 @@ static esp_err_t led_brightness_post_handler(httpd_req_t *req) {
     if (b > 255) {
       b = 255;
     }
-    esp_err_t err = led_set_brightness((uint8_t)b);
+    led_anim_stream_set_brightness((uint8_t)b);
+    esp_err_t err = ESP_OK;
     if (err == ESP_OK) {
       cJSON_AddBoolToObject(response, "success", true);
     } else {
@@ -1372,7 +1280,7 @@ esp_err_t web_server_start(uint16_t port) {
 #endif
   config.lru_purge_enable = true; // Reclaim stale sockets when all are in use
   config.max_uri_handlers =
-      32; // Room for captive portal + EQ + speedtest + brightness + channel + LED ws + device info
+      32; // Room for captive portal + brightness + channel + LED ws + device info
 #ifdef DAC_HAS_SUB_OFFSET
   config.max_uri_handlers += 2; // sub level get/post
 #endif
@@ -1397,30 +1305,6 @@ esp_err_t web_server_start(uint16_t port) {
   httpd_uri_t favicon_uri = {
       .uri = "/favicon.ico", .method = HTTP_GET, .handler = favicon_handler};
   httpd_register_uri_handler(s_server, &favicon_uri);
-
-  httpd_uri_t logs_uri = {
-      .uri = "/logs", .method = HTTP_GET, .handler = logs_page_handler};
-  httpd_register_uri_handler(s_server, &logs_uri);
-
-  httpd_uri_t speedtest_page_uri = {.uri = "/speedtest",
-                                    .method = HTTP_GET,
-                                    .handler = speedtest_page_handler};
-  httpd_register_uri_handler(s_server, &speedtest_page_uri);
-
-  httpd_uri_t speedtest_ping_uri = {.uri = "/api/speedtest/ping",
-                                    .method = HTTP_GET,
-                                    .handler = speedtest_ping_handler};
-  httpd_register_uri_handler(s_server, &speedtest_ping_uri);
-
-  httpd_uri_t speedtest_dl_uri = {.uri = "/api/speedtest/download",
-                                  .method = HTTP_GET,
-                                  .handler = speedtest_download_handler};
-  httpd_register_uri_handler(s_server, &speedtest_dl_uri);
-
-  httpd_uri_t speedtest_ul_uri = {.uri = "/api/speedtest/upload",
-                                  .method = HTTP_POST,
-                                  .handler = speedtest_upload_handler};
-  httpd_register_uri_handler(s_server, &speedtest_ul_uri);
 
   httpd_uri_t wifi_scan_uri = {.uri = "/api/wifi/scan",
                                .method = HTTP_GET,
@@ -1570,7 +1454,6 @@ esp_err_t web_server_start(uint16_t port) {
   httpd_register_uri_handler(s_server, &eq_post_uri);
 #endif
 
-  log_stream_register(s_server);
   led_anim_stream_register(s_server);
 
   ESP_LOGI(TAG, "Web server started on port %d with captive portal support",
