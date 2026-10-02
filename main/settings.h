@@ -241,3 +241,34 @@ esp_err_t settings_get_biamp_eq(float gains_db[2][2][SETTINGS_WAY_BANDS]);
  * Save the bi-amp EQ gains.
  */
 esp_err_t settings_set_biamp_eq(const float gains_db[2][2][SETTINGS_WAY_BANDS]);
+
+// ---- Control mode (MQTT vs Matter) ----
+
+/**
+ * Control mode for the LED/control subsystem.
+ * MQTT and Matter are mutually exclusive (RAM) — only one runs at a time.
+ */
+typedef enum {
+  SETTINGS_CTRL_MODE_MQTT = 0,   // Default: webapp + MQTT control
+  SETTINGS_CTRL_MODE_MATTER = 1, // Matter (HomeKit/Google/Alexa)
+} settings_ctrl_mode_t;
+
+/**
+ * Get saved control mode. Returns SETTINGS_CTRL_MODE_MQTT if never set.
+ */
+esp_err_t settings_get_ctrl_mode(uint8_t *mode);
+
+/**
+ * Save control mode to persistent storage.
+ */
+esp_err_t settings_set_ctrl_mode(uint8_t mode);
+
+// ---- Factory reset ----
+
+/**
+ * Erase ALL persistent data: WiFi credentials, HomeKit pairing keys,
+ * volume, device name, EQ, LED settings, channel mode, control mode.
+ * The device reboots into AP setup mode after this. Does not reboot itself —
+ * caller must call esp_restart().
+ */
+esp_err_t settings_factory_reset(void);

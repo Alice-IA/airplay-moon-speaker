@@ -40,6 +40,8 @@ set( SRC_FILES
     "led_strip_ctrl.c"
     "led_anim_stream.c"
     "moon_mqtt.c"
+    "moon_matter.cpp"
+    "status_led.c"
     "buttons.c"
     "playback_control.c"
     "dacp_client.c"
@@ -95,6 +97,7 @@ set( DEPS
     esp_eth
     spiffs_storage
     mqtt
+    esp_matter
 )
 
 # Bluetooth component only needed when A2DP is enabled

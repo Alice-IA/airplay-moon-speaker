@@ -1,62 +1,57 @@
-# ESP32-S3 target defaults - default to ESP32-S3 Generic board
+# ESP32-S3 target defaults - Moon Speaker (N16R8)
 CONFIG_BOARD_ESP32S3_GENERIC=y
 
-# Flash size is left at the ESP-IDF default (8 MB) so it works for
-# common modules like N8R2. Change it in menuconfig if your module has 16 MB.
-# CONFIG_ESPTOOLPY_FLASHSIZE_16MB is not set
+# Flash: 16 MB (N16R8). Use CONFIG_ESPTOOLPY_FLASHSIZE_8MB=y for N8R2.
+CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
+# CONFIG_ESPTOOLPY_FLASHSIZE_8MB=y
 
-# WebSocket support required by /ws/leds LED animation endpoint
-# and the original log stream WebSocket endpoint.
+
+# Custom partition table (dual OTA + spiffs storage)
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="components/boards/partitions.csv"
+CONFIG_PARTITION_TABLE_FILENAME="components/boards/partitions.csv"
+
+# PSRAM: OPI (Octal SPI) — 8MB on N16R8 / 2MB on N8R2
+CONFIG_SPIRAM=y
+CONFIG_SPIRAM_MODE_OCT=y
+
+# WebSocket support for /ws/leds LED animation endpoint
 CONFIG_HTTPD_WS_SUPPORT=y
 
-# Increase socket limit: AirPlay uses many concurrent sockets (RTSP, event,
-# RTP, RTCP) and the added WebSocket endpoint consumes one more per client.
+# AirPlay uses many concurrent sockets (RTSP, event, RTP, RTCP).
 # 16 is too tight and causes "Failed to create UDP socket: errno=23".
 CONFIG_LWIP_MAX_SOCKETS=32
 
-# USB Audio Class defaults for the current usb_device_uac integration.
-# Keep both streams stereo at 48 kHz so the UAC descriptors, feedback,
-# and AirPlay USB backend all use the same resampled output rate.
+# USB Audio Class (only used if AUDIO_OUTPUT_USB is selected)
 CONFIG_UAC_SPEAKER_CHANNEL_NUM=2
 CONFIG_UAC_MIC_CHANNEL_NUM=2
 CONFIG_UAC_SAMPLE_RATE=48000
 
-# GPIO defaults
-CONFIG_BAT_CHANNEL=7
-CONFIG_LED_RGB_GPIO=48
-CONFIG_I2S_SCK_IO=8
-CONFIG_I2S_BCK_IO=11
-CONFIG_I2S_WS_IO=13
-CONFIG_I2S_DO_IO=12
-CONFIG_I2S_GND_IO=14
+# I2S pins for MAX98357A (no MCLK needed)
+CONFIG_I2S_SCK_IO=-1
+CONFIG_I2S_BCK_IO=15
+CONFIG_I2S_WS_IO=16
+CONFIG_I2S_DO_IO=7
+CONFIG_I2S_GND_IO=-1
+CONFIG_I2S_VCC_IO=-1
 
-# ST7789 TFT display support is not enabled by default.
-# The display is optional hardware — enabling it configures specific SPI
-# GPIO pins which may conflict with other peripherals on your board.
-# To enable, add the following to your own sdkconfig.defaults.esp32s3
-# or run: idf.py menuconfig -> Display Configuration
-#
-# CONFIG_DISPLAY_ENABLED=y
-# CONFIG_DISPLAY_DRIVER_ST7789=y
-# CONFIG_DISPLAY_BUS_SPI=y
-# CONFIG_DISPLAY_SPI_CLK=18
-# CONFIG_DISPLAY_SPI_MOSI=17
-# CONFIG_DISPLAY_SPI_CS=15
-# CONFIG_DISPLAY_SPI_DC=16
-# CONFIG_DISPLAY_SPI_RST=21
-# CONFIG_DISPLAY_BL_GPIO=38
-# CONFIG_DISPLAY_UPDATE_MS=500
-#
-# LVGL configuration (required when display is enabled):
-# CONFIG_LV_CONF_SKIP=y
-# CONFIG_LV_COLOR_DEPTH_16=y
-# CONFIG_LV_MEM_SIZE_KILOBYTES=64
-# CONFIG_LV_USE_LABEL=y
-# CONFIG_LV_USE_BAR=y
-# CONFIG_LV_USE_THEME_DEFAULT=y
-# CONFIG_LV_FONT_MONTSERRAT_14=y
-# CONFIG_LV_FONT_MONTSERRAT_16=y
-# CONFIG_LV_FONT_MONTSERRAT_24=y
-# CONFIG_LV_FONT_DEFAULT_MONTSERRAT_14=y
-#
-# See components/display/README.md for full setup instructions.
+# WS2812 LED animation strip
+CONFIG_LED_ANIM_GPIO=10
+CONFIG_LED_ANIM_COUNT=12
+
+# Single-button media control: 1 click = play/pause, 2 = next, 3 = prev.
+# Change BTN_PLAY_PAUSE_GPIO to your wired GPIO if not using BOOT (GPIO0).
+CONFIG_BTN_SINGLE_BTN_MEDIA_CONTROL=y
+CONFIG_BTN_PLAY_PAUSE_GPIO=0
+
+# Audio buffer: 1000 frames for 8MB PSRAM (N16R8) — absorbs more WiFi jitter.
+# Use 400 for 2MB PSRAM (N8R2).
+CONFIG_AIRPLAY_AUDIO_BUFFER_FRAMES=1000
+
+# --- Matter (ESP-Matter) ---
+# Use ESP-IDF mDNS (shared with AirPlay on port 5353) instead of CHIP minimal mDNS.
+# This prevents the critical port 5353 conflict between AirPlay and Matter.
+CONFIG_USE_MINIMAL_MDNS=n
+
+# Move Matter BSS segments to PSRAM to free internal RAM.
+CONFIG_ESP_ALLOW_BSS_SEG_EXTERNAL_MEMORY=y

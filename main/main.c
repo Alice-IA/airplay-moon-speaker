@@ -16,6 +16,8 @@
 #include "wifi.h"
 #include "spiffs_storage.h"
 #include "moon_mqtt.h"
+#include "status_led.h"
+#include "moon_matter.h"
 
 #ifdef CONFIG_BT_A2DP_ENABLE
 #include "a2dp_sink.h"
@@ -263,6 +265,9 @@ void app_main(void) {
   ESP_ERROR_CHECK(playback_control_init());
   led_anim_stream_init();
 
+  // Status LED: orange while booting / waiting for WiFi
+  status_led_boot();
+
   // Initialize board-specific hardware (includes I2C/SPI bus for DAC)
   ESP_LOGI(TAG, "Board: %s", iot_board_get_info());
   esp_err_t err = iot_board_init();
@@ -301,19 +306,55 @@ void app_main(void) {
 
     // Wait for initial WiFi connection if credentials exist
     if (settings_has_wifi_credentials()) {
-      if (!wifi_wait_connected(30000)) {
+      if (wifi_wait_connected(30000)) {
+        // Connected: blue briefly, then off
+        status_led_wifi_connected();
+        vTaskDelay(pdMS_TO_TICKS(3000));
+        status_led_off();
+      } else {
         ESP_LOGI(TAG, "Connect to 'ESP32-AirPlay-Setup' -> http://192.168.4.1");
+        // Stay orange — no WiFi, waiting for setup
       }
     } else {
       ESP_LOGI(TAG, "Connect to 'ESP32-AirPlay-Setup' -> http://192.168.4.1");
+      // No credentials: stay orange (first boot / after factory reset)
     }
   } else {
     ESP_LOGI(TAG, "Ethernet connected — skipping WiFi");
+    status_led_wifi_connected();
+    vTaskDelay(pdMS_TO_TICKS(3000));
+    status_led_off();
   }
 
   // Start services that work on any interface
   web_server_start(80);
-  moon_mqtt_init();
+
+  // Control mode: MQTT (default) or Matter. Read from NVS — the play/pause
+  // button 3s hold toggles this and reboots. MQTT and Matter never run
+  // together (Matter's RAM footprint is too large to coexist on N8R2).
+  uint8_t ctrl_mode;
+  settings_get_ctrl_mode(&ctrl_mode);
+
+  if (ctrl_mode == SETTINGS_CTRL_MODE_MATTER) {
+    ESP_LOGI(TAG, "Control mode: Matter (MQTT disabled)");
+#ifdef CONFIG_MOON_MATTER_ENABLED
+    bool connected_for_matter = eth_available || wifi_is_connected();
+    if (connected_for_matter) {
+      esp_err_t matter_err = moon_matter_init();
+      if (matter_err != ESP_OK) {
+        ESP_LOGW(TAG, "Matter init failed (non-fatal): %s",
+                 esp_err_to_name(matter_err));
+      }
+    }
+#else
+    ESP_LOGW(TAG, "Matter mode selected but not compiled in — "
+                  "rebuild with esp_matter dependency enabled");
+#endif
+  } else {
+    ESP_LOGI(TAG, "Control mode: MQTT");
+    moon_mqtt_init();
+  }
+
   task_create_spiram(network_monitor_task, "net_mon", 4096, NULL, 5, NULL,
                      NULL);
 

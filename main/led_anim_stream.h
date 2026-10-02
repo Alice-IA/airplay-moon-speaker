@@ -3,6 +3,10 @@
 #include "esp_err.h"
 #include "esp_http_server.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /**
  * Initialize the LED animation stream subsystem.
  * Must be called before web_server_start().
@@ -60,3 +64,7 @@ void led_anim_stream_handle_frame(const uint8_t *payload, size_t len);
  * Payload format: led_count (2 BE), fps (2 BE), flags (1).
  */
 void led_anim_stream_handle_stream_start(const uint8_t *payload, size_t len);
+
+#ifdef __cplusplus
+}
+#endif

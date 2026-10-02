@@ -2,6 +2,7 @@
 
 #include "dac.h"
 #include "esp_log.h"
+#include "esp_wifi.h"
 #include "nvs.h"
 #include <string.h>
 
@@ -24,6 +25,7 @@ static const char *TAG = "settings";
 #define NVS_KEY_BIAMP_XOVER    "ba_xo"
 #define NVS_KEY_BIAMP_SWAP     "ba_swap"
 #define NVS_KEY_BIAMP_EQ       "ba_eq"
+#define NVS_KEY_CTRL_MODE      "ctrl_mode"
 #define NVS_KEY_DUAL_MODE      "dual_mode"
 
 #define MAX_WIFI_SSID_LEN     32
@@ -801,5 +803,79 @@ settings_set_biamp_eq(const float gains_db[2][2][SETTINGS_WAY_BANDS]) {
   } else {
     ESP_LOGE(TAG, "Failed to save bi-amp EQ: %s", esp_err_to_name(err));
   }
+  return err;
+}
+
+// ---- Control mode ----
+
+esp_err_t settings_get_ctrl_mode(uint8_t *mode) {
+  nvs_handle_t nvs;
+  esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READONLY, &nvs);
+  if (err != ESP_OK) {
+    *mode = SETTINGS_CTRL_MODE_MQTT;
+    return err;
+  }
+  err = nvs_get_u8(nvs, NVS_KEY_CTRL_MODE, mode);
+  nvs_close(nvs);
+  if (err != ESP_OK) {
+    *mode = SETTINGS_CTRL_MODE_MQTT;
+  }
+  return err;
+}
+
+esp_err_t settings_set_ctrl_mode(uint8_t mode) {
+  nvs_handle_t nvs;
+  esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READWRITE, &nvs);
+  if (err != ESP_OK) {
+    return err;
+  }
+  err = nvs_set_u8(nvs, NVS_KEY_CTRL_MODE, mode);
+  if (err == ESP_OK) {
+    err = nvs_commit(nvs);
+  }
+  nvs_close(nvs);
+  ESP_LOGI(TAG, "Control mode set to %d (%s)", mode,
+           mode == SETTINGS_CTRL_MODE_MATTER ? "Matter" : "MQTT");
+  return err;
+}
+
+// ---- Factory reset ----
+
+esp_err_t settings_factory_reset(void) {
+  nvs_handle_t nvs;
+  esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READWRITE, &nvs);
+  if (err != ESP_OK) {
+    ESP_LOGE(TAG, "Factory reset: failed to open NVS: %s", esp_err_to_name(err));
+    return err;
+  }
+  err = nvs_erase_all(nvs);
+  if (err == ESP_OK) {
+    err = nvs_commit(nvs);
+  }
+  nvs_close(nvs);
+
+  // ESP-IDF's WiFi driver keeps its OWN NVS copy of STA credentials
+  // (namespace "nvs.net80211", WIFI_STORAGE_FLASH). settings only holds a
+  // mirror. If we don't erase the driver's copy too, the device reconnects
+  // to the old network after "factory reset". esp_wifi_restore() resets the
+  // driver to defaults and wipes its stored config.
+  esp_err_t wifi_err = esp_wifi_restore();
+  if (wifi_err != ESP_OK) {
+    ESP_LOGW(TAG, "Factory reset: esp_wifi_restore failed: %s",
+             esp_err_to_name(wifi_err));
+  }
+
+  // Belt-and-braces: also erase the driver's NVS namespace directly in case
+  // esp_wifi_restore() isn't available or the driver wasn't started yet.
+  nvs_handle_t wifi_nvs;
+  if (nvs_open("nvs.net80211", NVS_READWRITE, &wifi_nvs) == ESP_OK) {
+    nvs_erase_all(wifi_nvs);
+    nvs_commit(wifi_nvs);
+    nvs_close(wifi_nvs);
+  }
+
+  ESP_LOGW(TAG, "Factory reset: all settings erased (settings=%s, wifi=%s)",
+           err == ESP_OK ? "OK" : esp_err_to_name(err),
+           wifi_err == ESP_OK ? "OK" : esp_err_to_name(wifi_err));
   return err;
 }

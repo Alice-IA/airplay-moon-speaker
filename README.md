@@ -1,277 +1,211 @@
 # AirPlay Moon Speaker
 
-ESP32-based AirPlay 2 speaker with WS2812 LED strip control over a binary WebSocket protocol.
+ESP32-S3 AirPlay 2 speaker with a WS2812 "moon" LED strip, controllable via MQTT, Matter (HomeKit), a physical button, and a binary WebSocket protocol.
 
-This project is based on [rbouteiller/airplay-esp32](https://github.com/rbouteiller/airplay-esp32) and adds:
+Based on [rbouteiller/airplay-esp32](https://github.com/rbouteiller/airplay-esp32), extended with:
 
-- Binary WebSocket endpoint `/ws/leds` for real-time LED control and animation streaming.
-- Support for 1 to 64 WS2812 addressable LEDs.
-- Two operating modes:
-  - **Single frame mode** (color picker / static color): a single `FRAME` is rendered immediately and persists until the next frame.
-  - **Animation stream mode** (`STREAM_START` + frames): frames are buffered and rendered at the configured FPS.
-- HTTP endpoint `/api/device/info` to query LED and firmware configuration.
+- **MQTT control** — full LED control over MQTT (HiveMQ or your broker) with a companion webapp.
+- **Matter (ESP-Matter)** — the moon appears as a color light in Apple Home / Google Home / Alexa.
+- **Physical button** — system control: 1 click toggles MQTT ↔ Matter, 5 s hold factory-resets.
+- **Status LED** — the moon itself shows system state (boot, WiFi, OTA) with colors.
+- **Dual OTA** — safe over-the-air updates with automatic rollback.
+- **Binary WebSocket** `/ws/leds` — low-level real-time LED frame streaming.
 
 ## Features
 
-- AirPlay 2 audio receiver
-- Bluetooth A2DP sink (on classic ESP32 boards)
-- Web-based setup and OTA updates
-- WS2812 LED strip control via WebSocket
-- HomeAssistant-friendly HTTP and WebSocket interfaces
+- AirPlay 2 audio receiver (ALAC/AAC, PTP clock sync)
+- Bluetooth A2DP sink
+- WS2812 LED strip (1–64 LEDs), built-in effects + frame streaming
+- MQTT control (webapp included) **or** Matter (HomeKit) — mutually exclusive, toggle with the button
+- Single-button media + system control
+- Status LED colors for boot / WiFi / OTA
+- Dual OTA with SHA-256 validation and rollback
+- Web-based WiFi setup (captive portal)
 
 ## Hardware
 
-| Component | Notes |
-|-----------|-------|
-| ESP32 or ESP32-S3 | With at least 4 MB flash. PSRAM recommended for AirPlay stability. |
-| PCM5102A I2S DAC | Or any I2S DAC supported by the base project. |
-| WS2812 LED strip | 10–12 LEDs recommended, up to 64 supported. |
-| 5 V power supply | Enough for the ESP32, DAC, amplifier, and LEDs. |
+| Component | This build | Notes |
+|-----------|-----------|-------|
+| ESP32-S3 N16R8 | ✅ | 16 MB flash, 8 MB PSRAM. Recommended (fits Matter + dual OTA). |
+| ESP32-S3 N8R2 | ⚠️ | 8 MB flash, 2 MB PSRAM. Works for MQTT-only; Matter is too tight. |
+| DAC | MAX98357A | I2S, mono, integrated 3.2 W amplifier. No MCLK needed. |
+| LEDs | WS2812 ×10–12 | Up to 64 supported. |
+| Button | 1× momentary | Active-low, between GPIO and GND. |
 
-### Wiring example (ESP32-S3 + PCM5102A + WS2812)
+### Wiring (ESP32-S3 + MAX98357A + WS2812)
 
-| PCM5102A | ESP32-S3 |
-|----------|----------|
-| VIN      | 5 V      |
-| GND      | GND      |
-| BCK      | GPIO 11  |
-| DIN      | GPIO 12  |
-| LCK      | GPIO 13  |
+| MAX98357A | ESP32-S3 |
+|-----------|----------|
+| VIN | 5 V |
+| GND | GND |
+| BCLK | GPIO 15 |
+| LRC (WS) | GPIO 16 |
+| DIN | GPIO 7 |
+| SD | GND = left, VCC = right, float = both (mixed) |
 
 | WS2812 | ESP32-S3 |
 |--------|----------|
-| 5 V    | 5 V      |
-| GND    | GND      |
-| DATA   | GPIO 21  |
+| 5 V | 5 V |
+| GND | GND |
+| DATA | GPIO 10 |
 
-> The LED data GPIO is configurable in `menuconfig`. Choose a free GPIO for your board.
+| Button | ESP32-S3 |
+|--------|----------|
+| one leg | GPIO 0 (BOOT) or your configured GPIO |
+| other leg | GND |
+
+> All GPIOs are configurable in `menuconfig`. The button is active-low with internal pull-up (no external resistor needed on ESP32-S3).
 
 ## Requirements
 
-- [ESP-IDF v5.x](https://docs.espressif.com/projects/esp-idf/en/latest/esp32/get-started/)
-- Python 3.8+
-- `websockets` Python package (for the example client)
+- [ESP-IDF v5.5+](https://docs.espressif.com/projects/esp-idf/en/latest/esp32/get-started/)
+- Python 3.8+ and `websockets` package (only for the example client)
 
 ## Installation
-
-1. Clone this repository with submodules:
 
 ```bash
 git clone --recursive https://github.com/Alice-IA/airplay-moon-speaker.git
 cd airplay-moon-speaker
-```
-
-2. Set the target (ESP32 or ESP32-S3):
-
-```bash
 idf.py set-target esp32s3
-# or
-idf.py set-target esp32
-```
-
-3. Open menuconfig and configure your board:
-
-```bash
-idf.py menuconfig
-```
-
-Required configuration sections:
-
-- **Board Selection**: choose your board (e.g. ESP32-S3 generic).
-- **Pin Configuration → LED GPIOs**:
-  - `LED animation strip GPIO (WS2812)` — set to your LED data pin.
-  - `LED animation strip LED count` — set to the number of LEDs (e.g. 12).
-- **Pin Configuration → I2S and S/PDIF Pin Configuration**: set BCK, WS, and DO pins for your DAC.
-- **Audio Output**: choose I2S, SPDIF, or USB depending on your hardware.
-
-4. Build and flash:
-
-```bash
 idf.py build
-idf.py -p /dev/ttyUSB0 flash
-idf.py -p /dev/ttyUSB0 monitor
+idf.py flash monitor
+
+The project ships a **`sdkconfig.defaults`** (base) with everything preconfigured for the N16R8: 16 MB flash, Octal PSRAM, dual OTA, I2S/LED/button pins, WebSocket, 32 sockets, Matter. **Do not hand-edit menuconfig for these** — they're applied automatically.
+
+> **Important:** always do a clean reconfigure when the defaults change:
+> ```bash
+> idf.py fullclean
+> rm sdkconfig            # PowerShell: Remove-Item sdkconfig
+> idf.py set-target esp32s3
+> idf.py build
+> ```
+> `set-target` does not overwrite an existing `sdkconfig`, so a stale one silently keeps old values (this caused repeated "flash 2 MB" and "partition table" errors).
+
+### Board variant: N8R2 (8 MB flash)
+
+Edit `sdkconfig.defaults` before building:
+- `CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y` → `CONFIG_ESPTOOLPY_FLASHSIZE_8MB=y`
+- `CONFIG_AIRPLAY_AUDIO_BUFFER_FRAMES=1000` → `400`
+- Use the 8 MB partition table (dual OTA 3 MB each) in `components/boards/partitions.csv`.
+
+## First boot & WiFi setup
+
+1. Power the board. The moon turns **orange** (booting / no WiFi).
+2. On first boot (or after factory reset) it broadcasts `ESP32-AirPlay-Setup`.
+3. Connect and open `http://192.168.4.1` (captive portal). Set device name + WiFi credentials.
+4. The device joins your network; the moon turns **blue** for 3 s, then **off**.
+5. AirPlay: the speaker appears by its device name in the iOS/macOS AirPlay menu.
+
+## Status LED colors
+
+The moon strip doubles as a system status light:
+
+| Color | Meaning |
+|-------|---------|
+| 🟠 Orange | Booting, no WiFi / waiting for setup, or OTA in progress |
+| 🔵 Blue | WiFi connected (3 s, then off) |
+| 🟢 Green | OTA update succeeded (brief, before reboot) |
+| 🔴 Red | OTA update failed |
+| ⚫ Off | Normal operation |
+
+## Physical button
+
+One button drives system control (default GPIO 0 / BOOT). **System only** — no media control. AirPlay 2 uses MRP (Media Remote Protocol) for remote control, which is not implemented, so media buttons can't drive the source over AirPlay 2. (Bluetooth AVRCP media control works fully if you use the A2DP source instead.)
+
+| Gesture | Action |
+|---------|--------|
+| 1 click | Toggle control mode MQTT ↔ Matter (reboots) |
+| Hold 5 s | Factory reset — erases WiFi, HomeKit pairing, all settings (reboots to setup) |
+
+## Control modes: MQTT vs Matter
+
+**MQTT and Matter are mutually exclusive** (Matter's RAM footprint is too large to coexist). The active mode is stored in NVS and toggled with the button (1 click) or compiled default.
+
+### MQTT mode (default)
+
+Full-featured control via MQTT. Designed for the included webapp but works with any MQTT client.
+
+- **Broker:** default HiveMQ public (`broker.hivemq.com:1883`, WSS `broker.hivemq.com:8884/mqtt`). Configurable.
+- **Device ID:** the ESP32 MAC address without colons (e.g. `AABBCCDDEEFF`).
+- **Client ID:** `moon_{device_id}`.
+
+Topics (`moon/{device_id}/...`):
+
+| Topic | Direction | Payload |
+|-------|-----------|---------|
+| `cmd/frame` | → device | Binary: frame_id(u32be) + timestamp(u32be) + RGBA pixels |
+| `cmd/stream` | → device | Binary: led_count(u16be) + fps(u16be) + flags(u8) |
+| `cmd/stop` | → device | empty or `stop` |
+| `cmd/effect` | → device | JSON `{effect,speed,intensity,brightness,color1,color2}` |
+| `cmd/brightness` | → device | JSON `{"brightness":180}` |
+| `status` | device → | JSON every 30 s: online, ip, mac, led_count, brightness, free_heap, rssi… |
+| (Last Will) | device → | retained `{"online":false}` on disconnect |
+
+The webapp lives in `webapp/` (uses MQTT.js over WSS, QoS 1, retained).
+
+### Matter mode
+
+The moon appears as a standard **Extended Color Light**:
+
+- **OnOff** → LEDs on/off (restores previous effect)
+- **Level Control** → brightness (0–254)
+- **Color Control** → hue + saturation
+- **Custom cluster `0x131BFC01`** → animation: `EffectEnum` (off/static/rainbow/breathe/chase/sparkle/fire), `Speed`, `Intensity`
+
+**Commissioning (Apple Home):** Casa → Agregar accesorio → scan the QR shown in the boot log, or enter manual code `34970112332`. Requires the N16R8 (8 MB PSRAM) for stable operation.
+
+Matter-specific config (already in `sdkconfig.defaults`):
+- `CONFIG_USE_MINIMAL_MDNS=n` — shares the ESP-IDF mDNS socket with AirPlay (both use UDP 5353). **Critical** to avoid the port conflict.
+- `CONFIG_ESP_ALLOW_BSS_SEG_EXTERNAL_MEMORY=y` — moves Matter BSS to PSRAM.
+
+## OTA updates
+
+Dual OTA slots (6 MB each on N16R8) with SHA-256 validation and automatic rollback.
+
+```bash
+curl -X POST --data-binary "@build/airplay2-receiver.bin" \
+  http://<device-ip>/api/ota/update
 ```
 
-> On first boot the device creates an access point named `ESP32-AirPlay-Setup`. Connect to it and configure your home WiFi.
+The moon turns **orange** during upload, **green** on success, then the device reboots into the new firmware. If the new image fails to boot, the bootloader rolls back to the previous slot automatically.
 
-## First boot and WiFi setup
+## WebSocket LED protocol (low-level)
 
-1. Power the board.
-2. On your phone or computer, connect to `ESP32-AirPlay-Setup`.
-3. A captive portal opens at `http://192.168.4.1`.
-4. Set a device name and your home WiFi credentials.
-5. The device restarts and joins your network.
-6. Find the device IP in your router or serial monitor.
-
-## LED WebSocket protocol
-
-Endpoint: `ws://<device-ip>/ws/leds`
-
-All messages are binary. First byte is protocol version (`0x01`), second byte is message type.
+Endpoint: `ws://<device-ip>/ws/leds`. All messages binary: byte 0 = version (`0x01`), byte 1 = type.
 
 ### Client → Device
 
-#### `STREAM_START` (0x01)
-
-Starts animation streaming mode. Frames will be buffered and rendered at the requested FPS.
-
+**`STREAM_START` (0x01)** — start animation streaming.
 ```
-Byte 0: version  = 0x01
-Byte 1: type     = 0x01
-Bytes 2-3: led_count (uint16 big-endian)
-Bytes 4-5: fps (uint16 big-endian)
-Byte 6: flags    (bit 0: loop — store frames and replay them)
+Byte 0: version=0x01 | Byte 1: type=0x01
+Bytes 2-3: led_count (u16be) | Bytes 4-5: fps (u16be) | Byte 6: flags (bit0: loop)
 ```
+With **loop** set, frames are stored in PSRAM and replayed after the stream ends.
 
-If the **loop** flag is set, the device stores every received frame in PSRAM and replays them in a loop after the stream ends. This is useful for short animations that should run continuously without keeping the WebSocket open.
-
-#### `FRAME` (0x02)
-
-Single frame. Behavior depends on current mode:
-
-- If no stream is active: rendered immediately and persisted.
-- If a stream is active: queued in the frame buffer.
-
+**`FRAME` (0x02)** — one frame. If no stream active: rendered immediately + persisted. If streaming: queued.
 ```
-Byte 0: version  = 0x01
-Byte 1: type     = 0x02
-Bytes 2-5: frame_id (uint32 big-endian)
-Bytes 6-9: timestamp_ms (uint32 big-endian)
-Bytes 10..: pixels (RGBA, 4 bytes per LED)
+Byte 0: version=0x01 | Byte 1: type=0x02
+Bytes 2-5: frame_id (u32be) | Bytes 6-9: timestamp_ms (u32be) | Bytes 10..: RGBA pixels
 ```
 
-#### `STREAM_STOP` (0x03)
-
-Stops animation mode and clears the LED strip.
-
-```
-Byte 0: version  = 0x01
-Byte 1: type     = 0x03
-```
+**`STREAM_STOP` (0x03)** — stop animation, clear strip.
 
 ### Device → Client
 
-#### `STREAM_READY` (0x81)
-
-Sent in response to `STREAM_START`.
-
-```
-Byte 0: version  = 0x01
-Byte 1: type     = 0x81
-Bytes 2-3: led_count (uint16 big-endian)
-Bytes 4-5: max_fps (uint16 big-endian)
-```
-
-#### `BUFFER_STATUS` (0x82)
-
-Sent when the frame buffer is running low.
-
-```
-Byte 0: version  = 0x01
-Byte 1: type     = 0x82
-Bytes 2-5: last_frame_id (uint32 big-endian)
-Bytes 6-7: buffer_time_ms (uint16 big-endian)
-```
-
-## Testing with the example Python client
-
-Install the dependency:
-
-```bash
-cd scripts
-pip install websockets
-```
-
-### Static color / color picker mode
-
-```bash
-python3 led_stream_client.py \
-  --ip 192.168.1.100 \
-  --mode static \
-  --color ff3366 \
-  --brightness 200
-```
-
-The strip turns the requested color and stays that way until another frame arrives.
-
-### Animation stream mode
-
-```bash
-python3 led_stream_client.py \
-  --ip 192.168.1.100 \
-  --mode animate
-```
-
-This sends `STREAM_START` and a rainbow animation at 30 FPS.
-
-### Animation loop mode
-
-```bash
-python3 led_stream_client.py \
-  --ip 192.168.1.100 \
-  --mode animate \
-  --loop
-```
-
-This sends `STREAM_START` with the loop flag set. The ESP32 stores the frames and keeps replaying them after the client disconnects. Send `STREAM_STOP` to clear the loop.
+**`STREAM_READY` (0x81)** — reply to STREAM_START: `led_count(u16be) + max_fps(u16be)`.
+**`BUFFER_STATUS` (0x82)** — low buffer: `last_frame_id(u32be) + buffer_time_ms(u16be)`.
 
 ## HTTP API
 
-### `GET /api/device/info`
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/device/info` | GET | LED count, color order, firmware version |
+| `/api/system/info` | GET | IP, MAC, free heap, network status |
+| `/api/led/brightness` | GET/POST | Global brightness `{"brightness":128}` |
+| `/api/led/effect` | POST | Run built-in effect (JSON) |
+| `/api/ota/update` | POST | OTA firmware upload (.bin body) |
 
-Returns LED and firmware configuration.
-
-Example response:
-
-```json
-{
-  "led_count": 12,
-  "color_order": "GRB",
-  "rgb_type": "RGB8",
-  "firmware_version": "v0.1.29",
-  "success": true
-}
-```
-
-### `GET /api/system/info`
-
-Returns network and system status (IP, MAC, free heap, etc.).
-
-### `GET /api/led/brightness`
-
-Returns the current global LED brightness.
-
-### `POST /api/led/brightness`
-
-Sets global LED brightness.
-
-```json
-{ "brightness": 128 }
-```
-
-### `POST /api/led/effect`
-
-Runs a built-in effect on the ESP32 without streaming frames.
-
-```json
-{
-  "effect": "rainbow",
-  "speed": 128,
-  "intensity": 128,
-  "brightness": 200,
-  "color1": "ff0000",
-  "color2": "0000ff"
-}
-```
-
-Available effects: `off`, `static`, `rainbow`, `breathe`, `chase`, `sparkle`, `fire`.
-
-- `speed`: 0-255 (higher = faster)
-- `intensity`: 0-255 (effect-specific)
-- `brightness`: 0-255 global brightness
-- `color1`, `color2`: hex colors used by some effects
-
-Example with `curl`:
+Built-in effects for `/api/led/effect` and MQTT `cmd/effect`: `off`, `static`, `rainbow`, `breathe`, `chase`, `sparkle`, `fire`.
 
 ```bash
 curl -X POST http://192.168.1.100/api/led/effect \
@@ -279,56 +213,69 @@ curl -X POST http://192.168.1.100/api/led/effect \
   -d '{"effect":"breathe","speed":80,"color1":"ff3366","brightness":150}'
 ```
 
+## Testing with the Python client
+
+```bash
+cd scripts
+pip install websockets
+
+# Static color
+python3 led_stream_client.py --ip 192.168.1.100 --mode static --color ff3366 --brightness 200
+
+# Rainbow animation at 30 FPS
+python3 led_stream_client.py --ip 192.168.1.100 --mode animate
+
+# Loop mode (device keeps replaying after disconnect)
+python3 led_stream_client.py --ip 192.168.1.100 --mode animate --loop
+```
+
 ## HomeAssistant integration
 
-### Query device info
+Two paths:
+
+- **Matter (recommended):** in Matter mode the device is a native Matter light — add it to Home Assistant via the Matter integration. Color, brightness, on/off work out of the box.
+- **MQTT:** point the firmware and HA at the same broker and drive `cmd/effect` / `cmd/brightness`, or use the REST endpoints:
 
 ```yaml
 rest:
   - resource: http://192.168.1.100/api/device/info
     scan_interval: 60
     sensor:
-      - name: "Moon Speaker LED Count"
-        value_template: "{{ value_json.led_count }}"
       - name: "Moon Speaker Firmware"
         value_template: "{{ value_json.firmware_version }}"
 ```
-
-### Send a static color
-
-You can use the `websocket_client` integration or a Python script triggered by an automation to send a `FRAME` message. For simple scenes, a shell command calling the example client also works:
-
-```yaml
-shell_command:
-  moon_speaker_red: |
-    python3 /config/scripts/led_stream_client.py --ip 192.168.1.100 --mode static --color ff0000 --brightness 200
-```
-
-For smoother integrations, wrap the binary protocol in a small Python service or HomeAssistant custom component.
 
 ## Project structure
 
 ```
 main/
-├── led_strip_ctrl.c/h      # WS2812 strip driver
-├── led_anim_stream.c/h     # WebSocket server and frame protocol
-├── network/web_server.c    # HTTP server, extended with /api/device/info and /ws/leds
-├── led.c                   # Status and single RGB LED (untouched for animation strip)
-├── main.c                  # App init, now calls led_anim_stream_init()
-└── CMakeLists.txt          # Includes new source files
+├── main.c                 # App init, control-mode selection, WiFi status LED
+├── led_strip_ctrl.c/h     # WS2812 strip driver
+├── led_anim_stream.c/h    # Frame protocol, effects engine, /ws/leds
+├── moon_mqtt.c/h          # MQTT client (cmd topics + status + LWT)
+├── moon_matter.cpp/h      # Matter Extended Color Light + custom animation cluster
+├── status_led.c/h         # System status colors on the moon strip
+├── buttons.c/h            # Button: 1 click = mode toggle, 5s hold = factory reset
+├── settings.c/h           # NVS: WiFi, mode, factory reset, etc.
+├── playback_control.c/h   # Source-agnostic media control (DACP/AVRCP)
+├── network/
+│   ├── web_server.c       # HTTP API + OTA handler
+│   └── ota.c/h            # Dual-slot OTA with SHA-256 + rollback
+└── CMakeLists.txt
 
-components/boards/Kconfig.projbuild  # LED_ANIM_GPIO and LED_ANIM_COUNT options
-
-scripts/
-└── led_stream_client.py    # Example Python client
+components/boards/         # Board Kconfig + partitions.csv (dual OTA)
+webapp/                    # MQTT.js webapp
+scripts/led_stream_client.py
+sdkconfig.defaults         # Base config (N16R8) — applied by set-target
 ```
 
-## Notes and limitations
+## Notes & limitations
 
-- The animation WebSocket and AirPlay share the WiFi interface. With only 10–12 LEDs at 30 FPS, traffic is negligible (~1.5 KB/s).
-- The frame buffer holds 8 frames. If the buffer runs low, the device sends `BUFFER_STATUS` to request more frames.
-- `STREAM_STOP` clears the strip. To keep the last frame after an animation, send a single `FRAME` before stopping.
-- WS2812 color order is GRB internally; the client still sends RGBA and the firmware handles the conversion.
+- **AirPlay 2 + MRP:** button media control of the source is limited (see "Physical button"). Bluetooth AVRCP works fully.
+- **RAM:** Matter + MQTT don't coexist; toggle mode with the button. N16R8 required for Matter.
+- **mDNS:** Matter and AirPlay share UDP 5353 via `CONFIG_USE_MINIMAL_MDNS=n`. Do not enable CHIP's minimal mDNS.
+- **WS2812 color order** is GRB internally; clients send RGBA and the firmware converts.
+- The animation WebSocket and AirPlay share WiFi; at 10–12 LEDs / 30 FPS traffic is ~1.5 KB/s (negligible).
 
 ## License
 

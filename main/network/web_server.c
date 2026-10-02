@@ -17,11 +17,16 @@
 #include "ethernet.h"
 #include "ota.h"
 #include "led_anim_stream.h"
+#include "status_led.h"
 #include "rtsp_server.h"
 #include "audio_output.h"
 #include "esp_app_desc.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+
+#ifdef CONFIG_MOON_MATTER_ENABLED
+#include "moon_matter.h"
+#endif
 
 #ifdef CONFIG_DAC_TAS58XX
 #include "eq_events.h"
@@ -785,6 +790,9 @@ static esp_err_t ota_update_handler(httpd_req_t *req) {
     return ESP_FAIL;
   }
 
+  // Status LED: orange while OTA runs
+  status_led_ota_start();
+
   // Stop AirPlay to free resources during OTA
   ESP_LOGI(TAG, "Stopping AirPlay for OTA update");
   rtsp_server_stop();
@@ -792,14 +800,18 @@ static esp_err_t ota_update_handler(httpd_req_t *req) {
   esp_err_t err = ota_start_from_http(req);
 
   if (err != ESP_OK) {
+    status_led_ota_fail();
     httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR,
                         esp_err_to_name(err));
     return ESP_FAIL;
   }
 
+  // Status LED: green on success
+  status_led_ota_done();
+
   // Send response before restarting
   httpd_resp_sendstr(req, "Firmware update complete, rebooting now!\n");
-  vTaskDelay(pdMS_TO_TICKS(500));
+  vTaskDelay(pdMS_TO_TICKS(800)); // let green show briefly
   esp_restart();
 
   return ESP_OK;
@@ -923,6 +935,56 @@ static esp_err_t system_restart_handler(httpd_req_t *req) {
   ESP_LOGI(TAG, "Restart requested via web interface");
   vTaskDelay(pdMS_TO_TICKS(500));
   esp_restart();
+
+  return ESP_OK;
+}
+
+/* ================================================================== */
+/*  Matter multi-admin commissioning API                              */
+/* ================================================================== */
+
+/**
+ * POST /api/matter/commission — reopen the Matter commissioning window so
+ * a second fabric (e.g. Home Assistant) can pair with the device that is
+ * already commissioned (e.g. to Apple Home). The window uses the factory
+ * passcode (20202021) and stays open for 300s.
+ */
+static esp_err_t matter_commission_handler(httpd_req_t *req) {
+  cJSON *json = cJSON_CreateObject();
+
+#ifdef CONFIG_MOON_MATTER_ENABLED
+  uint8_t ctrl_mode;
+  settings_get_ctrl_mode(&ctrl_mode);
+  if (ctrl_mode != SETTINGS_CTRL_MODE_MATTER) {
+    cJSON_AddBoolToObject(json, "success", false);
+    cJSON_AddStringToObject(json, "error",
+                            "Matter mode not active — toggle mode first "
+                            "(1 click on the system button)");
+  } else {
+    esp_err_t err = moon_matter_open_commissioning_window();
+    if (err == ESP_OK) {
+      cJSON_AddBoolToObject(json, "success", true);
+      cJSON_AddNumberToObject(json, "window_seconds", 300);
+      cJSON_AddNumberToObject(json, "passcode", 20202021);
+      cJSON_AddNumberToObject(json, "discriminator", 3840);
+    } else {
+      cJSON_AddBoolToObject(json, "success", false);
+      cJSON_AddStringToObject(json, "error",
+                              err == ESP_ERR_INVALID_STATE
+                                  ? "Matter not running (init failed?)"
+                                  : "Failed to open commissioning window");
+    }
+  }
+#else
+  cJSON_AddBoolToObject(json, "success", false);
+  cJSON_AddStringToObject(json, "error", "Matter not compiled in");
+#endif
+
+  char *json_str = cJSON_Print(json);
+  httpd_resp_set_type(req, "application/json");
+  httpd_resp_send(req, json_str, HTTPD_RESP_USE_STRLEN);
+  free(json_str);
+  cJSON_Delete(json);
 
   return ESP_OK;
 }
@@ -1281,6 +1343,7 @@ esp_err_t web_server_start(uint16_t port) {
   config.lru_purge_enable = true; // Reclaim stale sockets when all are in use
   config.max_uri_handlers =
       32; // Room for captive portal + brightness + channel + LED ws + device info
+  config.max_uri_handlers += 1; // matter commissioning window
 #ifdef DAC_HAS_SUB_OFFSET
   config.max_uri_handlers += 2; // sub level get/post
 #endif
@@ -1395,6 +1458,11 @@ esp_err_t web_server_start(uint16_t port) {
                                     .method = HTTP_POST,
                                     .handler = system_restart_handler};
   httpd_register_uri_handler(s_server, &system_restart_uri);
+
+  httpd_uri_t matter_commission_uri = {.uri = "/api/matter/commission",
+                                       .method = HTTP_POST,
+                                       .handler = matter_commission_handler};
+  httpd_register_uri_handler(s_server, &matter_commission_uri);
 
   httpd_uri_t led_effect_uri = {.uri = "/api/led/effect",
                                 .method = HTTP_POST,

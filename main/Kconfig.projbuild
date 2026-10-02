@@ -4,7 +4,7 @@ menu "Airplay ESP Configuration"
     menu "WiFi Configuration"
     config DEFAULT_AP_SSID
         string "Access Point SSID"
-        default "ESP32-AirPlay-Setup"
+        default "AirPlay-Moon-Speaker"
         help
             SSID (network name) the ESP32 will broadcast.
 
@@ -257,5 +257,36 @@ menu "Airplay ESP Configuration"
                 When enabled, a single play/pause press is deferred until the
                 double-click window expires. Two presses within that window
                 cycle the audio channel mode instead of play/pause.
+
+        config BTN_SINGLE_BTN_MEDIA_CONTROL
+            bool "Single-button media control (1=play/pause, 2=next, 3=prev)"
+            default n
+            help
+                Uses one button for all media playback control.
+                1 click = play/pause, 2 clicks = next track, 3 clicks = previous track.
+                Conflicts with BTN_PLAY_PAUSE_DOUBLE_CLICK (channel cycle).
+
+        config BTN_LONG_PRESS_POWER_OFF
+            bool "Long-press powers off (deep sleep)"
+            default n
+            help
+                Hold the play/pause button for 3s to power off via board_power_off()
+                (deep sleep). Only enable on boards with a battery power latch
+                (e.g. Waveshare ESP32-S3-Touch-LCD-1.54). On generic boards this
+                just deep-sleeps and immediately reboots via GPIO wakeup, which
+                looks like a reset. Leave disabled for the Moon Speaker.
+    endmenu
+
+    menu "Control Mode"
+        config MOON_MATTER_ENABLED
+            bool "Compile Matter support (moon_matter)"
+            default n
+            help
+                Compiles the Matter (ESP-Matter) control integration.
+                When disabled (default), only MQTT control is available and the
+                button 3s hold prints a warning. When enabled, the 3s hold
+                toggles between MQTT and Matter modes (reboots).
+                Matter requires the esp_matter component dependency in
+                idf_component.yml and ~1.4MB extra flash + significant PSRAM.
     endmenu
 endmenu
